@@ -1,0 +1,6 @@
+name = "bytestring"
+version = "0.1.0"
+defaultTargets = ["Bytestring"]
+
+[[lean_lib]]
+name = "Bytestring"
