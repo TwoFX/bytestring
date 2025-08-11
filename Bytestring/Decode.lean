@@ -78,8 +78,6 @@ def parseFirstByte (b : UInt8) : FirstByte :=
     .threeMore (b &&& 0x07) (UInt8.and_lt_add_one (by decide))
   else .invalid
 
-#check Nat.isValidChar
-
 def utf8DecodeChar? (bytes : ByteArray) (i : Nat) : Option Char :=
   if h₀ : i < bytes.size then
     match parseFirstByte bytes[i] with
