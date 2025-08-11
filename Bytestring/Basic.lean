@@ -111,6 +111,11 @@ def List.toByteString (l : List Char) : ByteString where
 
 @[simp] theorem List.bytes_toByteString {l : List Char} : l.toByteString.bytes = l.utf8Encode := rfl
 
+@[simp]
+theorem List.toByteString_nil : List.toByteString [] = ByteString.empty := by
+  ext1
+  simp
+
 theorem ByteString.exists_eq_toByteString (s : ByteString) :
     ∃ l : List Char, s = l.toByteString := by
   rcases s with ⟨_, ⟨⟨l, rfl⟩⟩⟩
@@ -141,8 +146,22 @@ theorem ByteString.validPos_push {s : ByteString} {c : Char} {byteIdx : Nat} :
   -- obtain ⟨l, rfl⟩ := s.exists_eq_toByteString
   refine ⟨?_, ?_⟩
   · rintro ⟨t₁, t₂, h, rfl⟩
-    have := congrArg ByteString.bytes h
-    sorry
+    obtain ⟨l, rfl⟩ := s.exists_eq_toByteString
+    obtain ⟨t₁, rfl⟩ := t₁.exists_eq_toByteString
+    obtain ⟨t₂, rfl⟩ := t₂.exists_eq_toByteString
+    match t₂ with
+    | [] => simp_all
+    | [x] =>
+      have := congrArg ByteString.bytes h
+      simp at this
+      sorry
+
+    | x::y::xs => sorry
+
+    -- simp [List.utf8Encode_append] at this
+    -- simp
+
+    -- sorry
     -- simp only [bytes_push, bytes_append] at this
 
 
