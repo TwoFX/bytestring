@@ -8,6 +8,10 @@ inductive FirstByte where
   | twoMore : (b : UInt8) → b < 0x10 → FirstByte
   | threeMore : (b : UInt8) → b < 0x08 → FirstByte
 
+inductive LaterByte where
+  | invalid : LaterByte
+  | valid : (b : UInt8) → b < 0x40 → LaterByte
+
 instance : Trans (· ≤ · : UInt8 → UInt8 → Prop) (· < · : UInt8 → UInt8 → Prop) (· < ·) where
   trans := UInt8.lt_of_le_of_lt
 
@@ -56,7 +60,6 @@ theorem UInt8.lt_0x80_of_and_eq_zero {b : UInt8} (h : b &&& 0x80 = 0) : b < 0x80
 theorem UInt8.lt_add_one {c : UInt8} (h : c ≠ -1) : c < c + 1 := by
   rw [Ne, ← UInt8.toNat_inj, ← Ne] at h
   simp only [toNat_neg, UInt8.reduceToNat, Nat.add_one_sub_one, Nat.mod_succ, ne_eq] at h
-
   rw [UInt8.lt_iff_toNat_lt, UInt8.toNat_add]
   simp only [UInt8.reduceToNat, Nat.reducePow]
 
@@ -78,39 +81,93 @@ def parseFirstByte (b : UInt8) : FirstByte :=
     .threeMore (b &&& 0x07) (UInt8.and_lt_add_one (by decide))
   else .invalid
 
+def parseLaterByte (b : UInt8) : LaterByte :=
+  if b &&& 0xc0 == 0x80 then
+    .valid (b &&& 0x3f) (UInt8.and_lt_add_one (by decide))
+  else .invalid
+
 def utf8DecodeChar? (bytes : ByteArray) (i : Nat) : Option Char :=
   if h₀ : i < bytes.size then
     match parseFirstByte bytes[i] with
-    | .invalid => none
-    | .done b₀ hb₀ => some ⟨b₀.toUInt32, Or.inl (by simp [UInt8.lt_iff_toNat_lt] at *; omega)⟩
+    | .invalid => none -- invalid first byte
+    | .done b₀ hb₀ => some ⟨b₀.toUInt32, ?done⟩
     | .oneMore b₀ hb₀ =>
       if h₁ : i + 1 < bytes.size then
-        let c₁ := bytes[i + 1]
-        sorry
+        match parseLaterByte bytes[i + 1] with
+        | .invalid => none -- invalid second byte
+        | .valid b₁ hb₁ =>
+          let r := (b₀.toUInt32 <<< 6) ||| b₁.toUInt32
+          if r < 0x80 then
+            none -- overlong encoding
+          else
+            some ⟨r, ?onemore⟩
       else none
     | .twoMore b₀ hb₀ =>
       if h₁ : i + 2 < bytes.size then
         let c₁ := bytes[i + 1]
         let c₂ := bytes[i + 2]
-        sorry
+        match parseLaterByte bytes[i + 1], parseLaterByte bytes[i + 2] with
+        | .invalid, .invalid => none -- invalid second/third byte
+        | .valid _ _, .invalid => none -- invalid third byte
+        | .invalid, .valid _ _ => none -- invalid second byte
+        | .valid b₁ hb₁, .valid b₂ hb₂ =>
+          let r := (b₀.toUInt32 <<< 12) ||| (b₁.toUInt32 <<< 6) ||| b₂.toUInt32
+          if r < 0x800 then
+            none -- overlong encoding
+          else if hr : 0xd800 ≤ r ∧ r ≤ 0xdfff then
+            none -- surrogate code point
+          else
+            some ⟨r, ?twomore⟩
       else none
     | .threeMore b₀ hb₀ =>
       if h₁ : i + 3 < bytes.size then
         let c₁ := bytes[i + 1]
         let c₂ := bytes[i + 2]
         let c₃ := bytes[i + 3]
-        sorry
+        match parseLaterByte bytes[i + 1], parseLaterByte bytes[i + 2], parseLaterByte bytes[i + 3] with
+        | .invalid, .invalid, .invalid => none -- invalid second/third/fourth byte
+        | .valid _ _, .invalid, .invalid => none -- invalid third/fouth byte
+        | .invalid, .valid _ _, .invalid => none -- invalid second/fourth byte
+        | .valid _ _, .valid _ _, .invalid => none -- invalid fourth byte
+        | .invalid, .invalid, .valid _ _ => none -- invalid second/third byte
+        | .valid _ _, .invalid, .valid _ _ => none -- invalid third byte
+        | .invalid, .valid _ _, .valid _ _ => none -- invalid second byte
+        | .valid b₁ hb₁, .valid b₂ hb₂, .valid b₃ hb₃ =>
+          let r := (b₀.toUInt32 <<< 18) ||| (b₁.toUInt32 <<< 12) ||| (b₂.toUInt32 <<< 6) ||| b₃.toUInt32
+          if h₁ : r < 0x10000 then
+            none -- overlong encoding
+          else if h₂ : 0x10ffff < r then
+            none -- out-of-range code point
+          else
+            some ⟨r, ?threemore⟩
       else none
   else none
-
--- def utf8DecodeChar? (bytes : ByteArray) (i : Nat) : Option Char :=
---   if h : i < bytes.size then
---     let c0 := bytes[i]
---     if c &&& 0x80 == 0 then
---       -- One byte encoding
---       sorry
---     else
---   else none
-
+where finally
+  case done => grind [UInt8.lt_iff_toNat_lt, UInt8.toNat_toUInt32]
+  case onemore =>
+    refine Or.inl ?_
+    subst r
+    simp only [UInt8.lt_iff_toNat_lt, UInt8.reduceToNat] at hb₀ hb₁
+    simp only [UInt32.toNat_or, UInt32.toNat_shiftLeft, UInt8.toNat_toUInt32, UInt32.reduceToNat,
+      Nat.reduceMod, Nat.reducePow]
+    rw [Nat.shiftLeft_eq, Nat.mod_eq_of_lt (by omega), Nat.mul_comm, ← Nat.two_pow_add_eq_or_of_lt hb₁]
+    omega
+  case twomore =>
+    simp only [UInt8.lt_iff_toNat_lt, UInt8.reduceToNat] at hb₀ hb₁ hb₂
+    simp only [Decidable.not_and_iff_not_or_not, UInt32.not_le] at hr
+    rcases hr with (hr|hr)
+    · exact Or.inl hr
+    · refine Or.inr ⟨hr, ?_⟩
+      subst r
+      simp only [UInt32.toNat_or, UInt32.toNat_shiftLeft, UInt8.toNat_toUInt32, UInt32.reduceToNat,
+        Nat.reduceMod, Nat.reducePow]
+      rw [Nat.shiftLeft_eq, Nat.shiftLeft_eq, Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega),
+        Nat.mul_comm _ (2 ^ _), Nat.mul_comm _ (2 ^ _), Nat.or_assoc, ← Nat.two_pow_add_eq_or_of_lt (b := b₂.toNat) hb₂,
+          ← Nat.two_pow_add_eq_or_of_lt (by omega)]
+      omega
+  case threemore =>
+    simp only [UInt8.lt_iff_toNat_lt, UInt8.reduceToNat] at hb₀ hb₁ hb₂ hb₃
+    simp only [UInt32.not_lt, UInt32.le_iff_toNat_le, UInt32.reduceToNat] at h₁ h₂
+    exact Or.inr ⟨by omega, by omega⟩
 
 end decode

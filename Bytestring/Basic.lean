@@ -84,14 +84,19 @@ theorem ByteString.empty_append {s : ByteString} : ByteString.empty ++ s = s := 
   ext1
   simp
 
+@[simp]
+theorem ByteString.append_empty {s : ByteString} : s ++ ByteString.empty = s := by
+  ext1
+  simp
+
 structure ByteString.ValidPos (s : ByteString) (byteIdx : Nat) : Prop where
   exists_prefix : ∃ t₁ t₂ : ByteString, s = t₁ ++ t₂ ∧ byteIdx = t₁.utf8Size
 
-@[simp]
+@[simp, grind]
 theorem ByteString.validPos_zero {s : ByteString} : s.ValidPos 0 where
   exists_prefix := ⟨ByteString.empty, s, by simp, by simp⟩
 
-@[simp]
+@[simp, grind]
 theorem ByteString.validPos_empty {byteIdx : Nat} :
     ByteString.empty.ValidPos byteIdx ↔ byteIdx = 0 := by
   refine ⟨?_, ?_⟩
@@ -101,6 +106,10 @@ theorem ByteString.validPos_empty {byteIdx : Nat} :
     omega
   · rintro rfl
     simp
+
+@[simp, grind]
+theorem ByteString.validPos_utf8size {s : ByteString} : s.ValidPos s.utf8Size where
+  exists_prefix := ⟨s, ByteString.empty, by simp, by simp⟩
 
 def UInt8.IsUtf8FirstByte (c : UInt8) : Prop :=
   c &&& 0x80 = 0 ∨ c &&& 0xe0 = 0xc0 ∨ c &&& 0xf0 = 0xe0 ∨ c &&& 0xf8 = 0xf0
@@ -141,37 +150,46 @@ theorem ByteString.append_toByteString_singleton {s : ByteString} {c : Char} :
   ext1
   simp
 
+def ByteString.singleton (c : Char) : ByteString :=
+  ByteString.empty.push c
+
+@[simp]
+theorem ByteString.bytes_singleton {c : Char} : (ByteString.singleton c).bytes = [c].utf8Encode := by
+  simp [singleton]
+
+@[simp, grind]
+theorem ByteString.utf8size_singleton {c : Char} : (ByteString.singleton c).utf8Size = c.utf8Size := by
+  simp [singleton]
+
+theorem isUtf8FirstByte_getElem_utf8Encode_singleton {c : Char} {i : Nat} {hi : i < [c].utf8Encode.size} :
+    UInt8.IsUtf8FirstByte [c].utf8Encode[i] ↔ i = 0 := sorry
+
+theorem ByteString.validPos_singleton {c : Char} {byteIdx : Nat} :
+    (ByteString.singleton c).ValidPos byteIdx ↔ byteIdx = 0 ∨ byteIdx = c.utf8Size := by
+  refine ⟨?_, ?_⟩
+  
+
+@[simp]
+theorem ByteString.append_singleton {s : ByteString} {c : Char} :
+    s ++ ByteString.singleton c = s.push c := by
+  ext1
+  simp
+
+theorem ByteString.validPos_append {s t : ByteString} {byteIdx : Nat} :
+    (s ++ t).ValidPos byteIdx ↔ s.ValidPos byteIdx ∨ (s.utf8Size ≤ byteIdx ∧ t.ValidPos (byteIdx - s.utf8Size)) := sorry
+
+set_option grind.warning false
+
 theorem ByteString.validPos_push {s : ByteString} {c : Char} {byteIdx : Nat} :
     (s.push c).ValidPos byteIdx ↔ s.ValidPos byteIdx ∨ byteIdx = (s.push c).utf8Size := by
-  -- obtain ⟨l, rfl⟩ := s.exists_eq_toByteString
-  refine ⟨?_, ?_⟩
-  · rintro ⟨t₁, t₂, h, rfl⟩
-    obtain ⟨l, rfl⟩ := s.exists_eq_toByteString
-    obtain ⟨t₁, rfl⟩ := t₁.exists_eq_toByteString
-    obtain ⟨t₂, rfl⟩ := t₂.exists_eq_toByteString
-    match t₂ with
-    | [] => simp_all
-    | [x] =>
-      have := congrArg ByteString.bytes h
-      simp at this
-      sorry
-
-    | x::y::xs => sorry
-
-    -- simp [List.utf8Encode_append] at this
-    -- simp
-
-    -- sorry
-    -- simp only [bytes_push, bytes_append] at this
-
-
-  · sorry
+  rw [← append_singleton, validPos_append, validPos_singleton, utf8Size_append]
+  grind
 
 theorem ByteString.push_induction (s : ByteString) (motive : ByteString → Prop) (empty : motive ByteString.empty)
     (push : ∀ b c, motive b → motive (b.push c)) : motive s := sorry
 
-theorem isUtf8FirstByte_getElem_utf8EncodeChar (c : Char) (i : Nat) (hi : i < (String.utf8EncodeChar c).length) :
-    UInt8.IsUtf8FirstByte (String.utf8EncodeChar c)[i] ↔ i = 0 := sorry
+-- theorem isUtf8FirstByte_getElem_utf8EncodeChar (c : Char) (i : Nat) (hi : i < (String.utf8EncodeChar c).length) :
+--     UInt8.IsUtf8FirstByte (String.utf8EncodeChar c)[i] ↔ i = 0 := sorry
 
 theorem ByteString.validPos_iff_isUtf8FirstByte (s : ByteString) (byteIdx : Nat) :
     s.ValidPos byteIdx ↔
@@ -185,7 +203,7 @@ theorem ByteString.validPos_iff_isUtf8FirstByte (s : ByteString) (byteIdx : Nat)
       · refine Or.inr ⟨by simp [Char.utf8Size_pos], ?_⟩
         simp only [utf8ByteAt, bytes_push, ← size_bytes]
         rw [ByteArray.getElem_append_right (Nat.le_refl _)]
-        simp [List.utf8Encode_singleton, isUtf8FirstByte_getElem_utf8EncodeChar]
+        simp [isUtf8FirstByte_getElem_utf8Encode_singleton]
       · refine Or.inr ⟨by simp; omega, ?_⟩
         simp only [utf8ByteAt, bytes_push]
         rwa [ByteArray.getElem_append_left, ← utf8ByteAt]
@@ -198,5 +216,5 @@ theorem ByteString.validPos_iff_isUtf8FirstByte (s : ByteString) (byteIdx : Nat)
           rwa [ByteArray.getElem_append_left h', ← utf8ByteAt] at hb
         · refine Or.inl (Or.inl ?_)
           rw [ByteArray.getElem_append_right (by simp; omega)] at hb
-          simp [List.utf8Encode_singleton, isUtf8FirstByte_getElem_utf8EncodeChar] at hb
+          simp [isUtf8FirstByte_getElem_utf8Encode_singleton] at hb
           omega

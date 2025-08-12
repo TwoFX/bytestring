@@ -52,6 +52,11 @@ theorem ByteArray.empty_append {b : ByteArray} : ByteArray.empty ++ b = b := by
   simp
 
 @[simp]
+theorem ByteArray.append_empty {b : ByteArray} : b ++ ByteArray.empty = b := by
+  ext1
+  simp
+
+@[simp]
 theorem ByteArray.size_append {a b : ByteArray} : (a ++ b).size = a.size + b.size := by
   simp [← size_data]
 
