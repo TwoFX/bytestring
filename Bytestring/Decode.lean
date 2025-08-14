@@ -1,3 +1,4 @@
+import Bytestring.ByteArray
 
 section decode
 
@@ -71,8 +72,8 @@ theorem UInt8.and_lt_add_one {b c : UInt8} (h : c ≠ -1) : b &&& c < c + 1 :=
 
 @[inline]
 def parseFirstByte (b : UInt8) : FirstByte :=
-  if h : b &&& 0x80 == 0 then
-    .done b (UInt8.lt_0x80_of_and_eq_zero (by simpa using h))
+  if h : b < 128 then
+    .done b h
   else if b &&& 0xe0 == 0xc0 then
     .oneMore (b &&& 0x1f) (UInt8.and_lt_add_one (by decide))
   else if b &&& 0xf0 == 0xe0 then
@@ -81,11 +82,24 @@ def parseFirstByte (b : UInt8) : FirstByte :=
     .threeMore (b &&& 0x07) (UInt8.and_lt_add_one (by decide))
   else .invalid
 
+theorem parseFirstByte_eq_done (b : UInt8) (hb : b ≤ 127) : parseFirstByte b = .done b (by grind only) := by
+  grind [parseFirstByte]
+
+theorem parseFirstByte_eq_oneMore (b : UInt8) (hb₁ : 128 ≤ b) (hb₂ : b &&& 0xe0 = 0xc0) :
+    parseFirstByte b = .oneMore (b &&& 0x1f) (UInt8.and_lt_add_one (by decide)) := by
+  grind [parseFirstByte]
+
+@[inline]
 def parseLaterByte (b : UInt8) : LaterByte :=
   if b &&& 0xc0 == 0x80 then
     .valid (b &&& 0x3f) (UInt8.and_lt_add_one (by decide))
   else .invalid
 
+theorem parseLaterByte_eq_valid (b : UInt8) (hb : b &&& 0xc0 = 0x80) :
+    parseLaterByte b = .valid (b &&& 0x3f) (UInt8.and_lt_add_one (by decide)) := by
+  grind [parseLaterByte]
+
+@[inline]
 def utf8DecodeChar? (bytes : ByteArray) (i : Nat) : Option Char :=
   if h₀ : i < bytes.size then
     match parseFirstByte bytes[i] with
@@ -169,5 +183,61 @@ where finally
     simp only [UInt8.lt_iff_toNat_lt, UInt8.reduceToNat] at hb₀ hb₁ hb₂ hb₃
     simp only [UInt32.not_lt, UInt32.le_iff_toNat_le, UInt32.reduceToNat] at h₁ h₂
     exact Or.inr ⟨by omega, by omega⟩
+
+def utf8DecodeChar (bytes : ByteArray) (i : Nat) (h : (utf8DecodeChar? bytes i).isSome) : Char :=
+  (utf8DecodeChar? bytes i).get h
+
+theorem utf8DecodeChar?_utf8EncodeChar_append {b : ByteArray} {c : Char} :
+    utf8DecodeChar? ((String.utf8EncodeChar c).toByteArray ++ b) 0 = some c := by
+  fun_cases String.utf8EncodeChar c with
+  | case1 v h =>
+    rw [utf8DecodeChar?, dif_pos (by simp; grind [Char.utf8Size_pos])]
+    rw [parseFirstByte_eq_done]
+    · simp only [Option.some.injEq]
+      ext
+      simp
+      grind
+    · simp [UInt8.le_iff_toNat_le, UInt32.le_iff_toNat_le] at h ⊢
+      grind
+  | case2 v h₁ h₂ =>
+    rw [utf8DecodeChar?, dif_pos (by simp; grind [Char.utf8Size_pos])]
+    rw [parseFirstByte_eq_oneMore]
+    · simp only
+      rw [dif_pos (by simp; grind)]
+      simp only [Nat.zero_add, List.size_toByteArray, List.length_cons, List.length_nil,
+        Nat.reduceAdd, Nat.lt_add_one, ByteArray.getElem_append_left, List.getElem_toByteArray,
+        List.getElem_cons_succ, List.getElem_cons_zero, Nat.zero_lt_succ, UInt8.toUInt32_and,
+        UInt8.toUInt32_or, UInt32.toUInt32_toUInt8, Nat.reduceLT, UInt8.toUInt32_ofNat]
+      rw [parseLaterByte_eq_valid]
+      · simp only [UInt8.toUInt32_and, UInt8.toUInt32_or, UInt32.toUInt32_toUInt8, Nat.reduceLT,
+          UInt8.toUInt32_ofNat, Option.ite_none_left_eq_some, UInt32.not_lt, Option.some.injEq]
+        refine ⟨?_, ?_⟩
+        · sorry
+        · ext
+          simp
+          sorry
+      · sorry
+    · simp
+      sorry
+    · simp
+      sorry
+  | case3 => sorry
+  | case4 => sorry
+
+theorem exists_of_utf8DecodeChar?_eq_some {b : ByteArray} {c : Char} (h : utf8DecodeChar? b 0 = some c) :
+    ∃ l, b = (String.utf8EncodeChar c).toByteArray ++ l := sorry
+
+theorem utf8DecodeChar?_eq_utf8DecodeChar?_drop {b : ByteArray} {i : Nat} :
+    utf8DecodeChar? b i = utf8DecodeChar? (b.extract i b.size) 0 := by
+  simp only [utf8DecodeChar?]
+  sorry
+
+theorem le_size_of_utf8DecodeChar?_eq_some {b : ByteArray} {i : Nat} (hi : i ≤ b.size) {c : Char}
+    (h : utf8DecodeChar? b i = some c) : i + c.utf8Size ≤ b.size := by
+  rw [utf8DecodeChar?_eq_utf8DecodeChar?_drop] at h
+  obtain ⟨l, hl⟩ := exists_of_utf8DecodeChar?_eq_some h
+  replace hl := congrArg ByteArray.size hl
+  simp at hl
+  omega
 
 end decode
