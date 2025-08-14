@@ -357,7 +357,20 @@ theorem IsGood.getElem {P : α → Prop} {l : List α} (h : IsGood P l) (i : Nat
   rw [List.getElem_cons]
   split <;> simp_all
 
-theorem BitVec.and_twoPow_eq_zero_of_lt {b : BitVec w} {i : Nat} (h : b < BitVec.twoPow w i) : b &&& BitVec.twoPow w i = 0 := sorry
+theorem BitVec.twoPow_le_of_getElem_eq_true {b : BitVec w} {i : Nat} {hi} (h : b[i]'hi = true) : twoPow w i ≤ b := by
+  simp only [BitVec.le_def, BitVec.toNat_twoPow_of_lt hi]
+  apply Nat.le_of_testBit
+  simpa only [Nat.testBit_two_pow, decide_eq_true_eq, forall_eq', BitVec.testBit_toNat, BitVec.getLsbD_eq_getElem hi]
+
+theorem BitVec.and_twoPow_eq_zero_of_lt {b : BitVec w} {i : Nat} (h : b < twoPow w i) : b &&& twoPow w i = 0#w := by
+  apply BitVec.eq_of_getElem_eq
+  intro j hj
+  simp only [getElem_and, getElem_twoPow, getElem_zero, Bool.and_eq_false_imp,
+    decide_eq_false_iff_not]
+  rintro hbj rfl
+  have := BitVec.twoPow_le_of_getElem_eq_true hbj
+  simp only [BitVec.le_def, BitVec.lt_def] at h this
+  omega
 
 theorem isUtf8FirstByte_getElem_utf8EncodeChar (c : Char) (i : Nat) (hi : i < (String.utf8EncodeChar c).length) :
     UInt8.IsUtf8FirstByte (String.utf8EncodeChar c)[i] ↔ i = 0 := by
