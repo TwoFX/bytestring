@@ -185,6 +185,11 @@ theorem List.toByteString_nil : List.toByteString [] = ByteString.empty := by
   ext1
   simp
 
+@[simp]
+theorem List.toByteString_append {l₁ l₂ : List Char} : (l₁ ++ l₂).toByteString = l₁.toByteString ++ l₂.toByteString := by
+  ext1
+  simp
+
 def ByteString.toCharArray (b : ByteString) : Array Char :=
   b.bytes.utf8Decode?.get (b.bytes.isSome_utf8Decode?_iff.2 b.isValidUtf8)
 
@@ -196,48 +201,70 @@ def ByteString.data (b : ByteString) : List Char :=
   b.toCharArray.toList
 
 @[simp]
-theorem ByteString.data_eq_toList_toCharArray {b : ByteString} : b.data = b.toCharArray.toList := rfl
+theorem ByteString.data_empty : ByteString.empty.data = [] := by
+  simp [data]
 
 def ByteString.length (b : ByteString) : Nat :=
   b.toCharArray.size
 
-theorem ByteArray.utf8Decode?go_eq_utf8Decode?go_extract {b : ByteArray} {i : Nat} {hi : i ≤ b.size} {acc : Array Char} :
-    utf8Decode?.go b i hi acc = (utf8Decode?.go (b.extract i b.size) 0 (by simp) #[]).map (acc ++ ·) := by
-  fun_induction utf8Decode?.go b i hi acc with
-  | case1 => simp [utf8Decode?.go]
-  | case2 i hi acc h₁ h₂ =>
-    rw [utf8Decode?.go]
-    simp only [size_extract, Nat.le_refl, Nat.min_eq_left, Nat.zero_add, List.push_toArray,
-      List.nil_append]
-    rw [if_neg (by omega)]
-    rw [utf8DecodeChar?_eq_utf8DecodeChar?_drop] at h₂
-    split <;> simp_all
-  | case3 i hi acc h₁ c h₂ ih =>
-    rw [ih]
-    sorry
+@[simp]
+theorem ByteString.size_toCharArray {b : ByteString} :
+    b.toCharArray.size = b.length := rfl
 
-theorem ByteArray.utf8Decode?_utf8Encode_singleton_append {l : ByteArray} {c : Char} :
-    ([c].utf8Encode ++ l).utf8Decode? = l.utf8Decode?.map (#[c] ++ ·) := by
-  rw [utf8Decode?, utf8Decode?.go, if_neg (by simp [List.utf8Encode_singleton]; grind [Char.utf8Size_pos])]
-  split
-  · simp_all [utf8DecodeChar?_utf8Encode_singleton_append]
-  · rename_i d h
-    obtain rfl : c = d := by simpa [utf8DecodeChar?_utf8Encode_singleton_append] using h
-    rw [utf8Decode?go_eq_utf8Decode?go_extract, utf8Decode?, Nat.zero_add]
-    simp only [List.push_toArray, List.nil_append]
-    congr
-    apply extract_append_eq_right
-    simp [List.utf8Encode_singleton]
+@[simp]
+theorem ByteString.length_data {b : ByteString} :
+    b.data.length = b.length := rfl
 
+-- theorem ByteArray.utf8Decode?go_eq_utf8Decode?go_extract {b : ByteArray} {i : Nat} {hi : i ≤ b.size} {acc : Array Char} :
+--     utf8Decode?.go b i hi acc = (utf8Decode?.go (b.extract i b.size) 0 (by simp) #[]).map (acc ++ ·) := by
+--   fun_induction utf8Decode?.go b i hi acc with
+--   | case1 => simp [utf8Decode?.go]
+--   | case2 i hi acc h₁ h₂ =>
+--     rw [utf8Decode?.go]
+--     simp only [size_extract, Nat.le_refl, Nat.min_eq_left, Nat.zero_add, List.push_toArray,
+--       List.nil_append]
+--     rw [if_neg (by omega)]
+--     rw [utf8DecodeChar?_eq_utf8DecodeChar?_drop] at h₂
+--     split <;> simp_all
+--   | case3 i hi acc h₁ c h₂ ih =>
+--     rw [ih]
+--     sorry
+
+-- theorem ByteArray.utf8Decode?_utf8Encode_singleton_append {l : ByteArray} {c : Char} :
+--     ([c].utf8Encode ++ l).utf8Decode? = l.utf8Decode?.map (#[c] ++ ·) := by
+--   rw [utf8Decode?, utf8Decode?.go, if_neg (by simp [List.utf8Encode_singleton]; grind [Char.utf8Size_pos])]
+--   split
+--   · simp_all [utf8DecodeChar?_utf8Encode_singleton_append]
+--   · rename_i d h
+--     obtain rfl : c = d := by simpa [utf8DecodeChar?_utf8Encode_singleton_append] using h
+--     rw [utf8Decode?go_eq_utf8Decode?go_extract, utf8Decode?, Nat.zero_add]
+--     simp only [List.push_toArray, List.nil_append]
+--     congr
+--     apply extract_append_eq_right
+--     simp [List.utf8Encode_singleton]
+
+@[simp]
 theorem List.data_toByteString {l : List Char} : l.toByteString.data = l := by
   induction l with
   | nil => simp
   | cons c l ih =>
-    simp
     sorry
 
+@[simp]
 theorem ByteString.toByteString_data {b : ByteString} : b.data.toByteString = b := by
   sorry
+
+theorem List.toByteString_injective {l₁ l₂ : List Char} (h : l₁.toByteString = l₂.toByteString) : l₁ = l₂ := by
+  simpa using congrArg ByteString.data h
+
+@[simp]
+theorem ByteString.data_append {l₁ l₂ : ByteString} : (l₁ ++ l₂).data = l₁.data ++ l₂.data := by
+  apply List.toByteString_injective
+  simp
+
+@[simp]
+theorem ByteString.utf8encode_data {b : ByteString} : b.data.utf8Encode = b.bytes :=
+  congrArg ByteString.bytes (ByteString.toByteString_data (b := b))
 
 structure ByteString.ValidPos (s : ByteString) (byteIdx : Nat) : Prop where
   exists_prefix : ∃ t₁ t₂ : ByteString, s = t₁ ++ t₂ ∧ byteIdx = t₁.utf8Size
@@ -257,12 +284,25 @@ theorem ByteString.validPos_empty {byteIdx : Nat} :
   · rintro rfl
     simp
 
+theorem List.validPos_toByteString {l : List Char} {byteIdx : Nat} :
+    l.toByteString.ValidPos byteIdx ↔ ∃ i, byteIdx = (l.take i).toByteString.utf8Size := by
+  refine ⟨?_, ?_⟩
+  · rintro ⟨⟨t₁, t₂, ht, rfl⟩⟩
+    refine ⟨t₁.length, ?_⟩
+    have := congrArg ByteString.data ht
+    simp at this
+    subst this
+    simp [← ByteString.size_toCharArray]
+  · rintro ⟨i, rfl⟩
+    refine ⟨⟨(l.take i).toByteString, (l.drop i).toByteString, ?_, rfl⟩⟩
+    simp [← List.toByteString_append]
+
 @[simp, grind]
 theorem ByteString.validPos_utf8size {s : ByteString} : s.ValidPos s.utf8Size where
   exists_prefix := ⟨s, ByteString.empty, by simp, by simp⟩
 
-theorem ByteString.validPos_iff_isValidUtf8 {s : ByteString} {byteIdx : Nat} (hb : byteIdx ≤ s.utf8Size) :
-    s.ValidPos byteIdx ↔ IsValidUtf8 (s.bytes.extract 0 byteIdx) := sorry
+-- theorem ByteString.validPos_iff_isValidUtf8 {s : ByteString} {byteIdx : Nat} (hb : byteIdx ≤ s.utf8Size) :
+--     s.ValidPos byteIdx ↔ IsValidUtf8 (s.bytes.extract 0 byteIdx) := sorry
 
 def UInt8.IsUtf8FirstByte (c : UInt8) : Prop :=
   c &&& 0x80 = 0 ∨ c &&& 0xe0 = 0xc0 ∨ c &&& 0xf0 = 0xe0 ∨ c &&& 0xf8 = 0xf0
@@ -303,6 +343,10 @@ theorem ByteString.bytes_singleton {c : Char} : (ByteString.singleton c).bytes =
 theorem ByteString.utf8size_singleton {c : Char} : (ByteString.singleton c).utf8Size = c.utf8Size := by
   simp [singleton]
 
+theorem ByteString.singleton_eq_toByteString {c : Char} : ByteString.singleton c = [c].toByteString := by
+  ext1
+  simp
+
 theorem isUtf8FirstByte_getElem_utf8EncodeChar (c : Char) (i : Nat) (hi : i < (String.utf8EncodeChar c).length) :
     UInt8.IsUtf8FirstByte (String.utf8EncodeChar c)[i] ↔ i = 0 := by
   fun_cases String.utf8EncodeChar with
@@ -319,13 +363,21 @@ theorem isUtf8FirstByte_getElem_utf8EncodeChar (c : Char) (i : Nat) (hi : i < (S
 
 
 theorem isUtf8FirstByte_getElem_utf8Encode_singleton {c : Char} {i : Nat} {hi : i < [c].utf8Encode.size} :
-    UInt8.IsUtf8FirstByte [c].utf8Encode[i] ↔ i = 0 := sorry
+    UInt8.IsUtf8FirstByte [c].utf8Encode[i] ↔ i = 0 := by
+  simp [List.utf8Encode_singleton, isUtf8FirstByte_getElem_utf8EncodeChar]
 
 theorem ByteString.validPos_singleton {c : Char} {byteIdx : Nat} :
     (ByteString.singleton c).ValidPos byteIdx ↔ byteIdx = 0 ∨ byteIdx = c.utf8Size := by
+  rw [singleton_eq_toByteString, List.validPos_toByteString]
   refine ⟨?_, ?_⟩
-  · sorry
-  · sorry
+  · rintro ⟨i, rfl⟩
+    obtain ⟨rfl, hi⟩ : i = 0 ∨ 1 ≤ i := by omega
+    · simp
+    · rw [List.take_of_length_le (by simpa)]
+      simp [← singleton_eq_toByteString]
+  · rintro (rfl|rfl)
+    · exact ⟨0, by simp⟩
+    · exact ⟨1, by simp [← singleton_eq_toByteString]⟩
 
 @[simp]
 theorem ByteString.append_singleton {s : ByteString} {c : Char} :
@@ -333,8 +385,26 @@ theorem ByteString.append_singleton {s : ByteString} {c : Char} :
   ext1
   simp
 
+theorem List.take_eq_take_min {l : List α} {i : Nat} : l.take i = l.take (min i l.length) := by
+  simp [List.take_eq_take_iff]
+
 theorem ByteString.validPos_append {s t : ByteString} {byteIdx : Nat} :
-    (s ++ t).ValidPos byteIdx ↔ s.ValidPos byteIdx ∨ (s.utf8Size ≤ byteIdx ∧ t.ValidPos (byteIdx - s.utf8Size)) := sorry
+    (s ++ t).ValidPos byteIdx ↔ s.ValidPos byteIdx ∨ (s.utf8Size ≤ byteIdx ∧ t.ValidPos (byteIdx - s.utf8Size)) := by
+  obtain ⟨s, rfl⟩ := exists_eq_toByteString s
+  obtain ⟨t, rfl⟩ := exists_eq_toByteString t
+  rw [← List.toByteString_append, List.validPos_toByteString, List.validPos_toByteString, List.validPos_toByteString]
+  refine ⟨?_, ?_⟩
+  · rintro ⟨j, rfl⟩
+    by_cases h : j ≤ s.length
+    · exact Or.inl ⟨j, by simp [List.take_append_of_le_length h]⟩
+    · refine Or.inr ⟨?_, ⟨j - s.length, ?_⟩⟩ <;>
+        simp [List.take_append, List.take_of_length_le (i := j) (l := s) (by omega)]
+  · rintro (⟨j, rfl⟩|⟨h, ⟨j, hj⟩⟩)
+    · refine ⟨min j s.length, ?_⟩
+      rw [List.take_append_of_le_length (Nat.min_le_right ..), ← List.take_eq_take_min]
+    · refine ⟨s.length + j, ?_⟩
+      simp [List.take_append, List.take_of_length_le (i := s.length + j) (l := s) (by omega)]
+      omega
 
 theorem ByteString.validPos_push {s : ByteString} {c : Char} {byteIdx : Nat} :
     (s.push c).ValidPos byteIdx ↔ s.ValidPos byteIdx ∨ byteIdx = (s.push c).utf8Size := by
