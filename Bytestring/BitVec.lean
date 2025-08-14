@@ -58,7 +58,7 @@ theorem lt_iff_getElem {b b' : BitVec w} :
       rwa [← getLsbD_eq_getElem]
   | case3 w' b b' h₁ h₂ =>
     simp only [Bool.false_eq_true, Nat.succ_eq_add_one, false_iff, not_exists, _root_.not_and,
-      Classical.not_forall, not_imp]
+      Classical.not_forall]
     intro j hj hj₁ hj₂
     rw [msb_eq_getLsbD_last, Nat.add_sub_cancel] at h₁ h₂
     rw [← getLsbD_eq_getElem] at hj₁ hj₂

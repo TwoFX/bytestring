@@ -347,20 +347,90 @@ theorem ByteString.singleton_eq_toByteString {c : Char} : ByteString.singleton c
   ext1
   simp
 
+inductive IsGood (P : α → Prop) : List α → Prop where
+  | intro {a : α} {as : List α} (ha : P a) (has : ∀ b ∈ as, ¬P b) : IsGood P (a::as)
+
+theorem IsGood.getElem {P : α → Prop} {l : List α} (h : IsGood P l) (i : Nat) (hi : i < l.length) :
+    P l[i] ↔ i = 0 := by
+  cases h
+  rename_i a as ha has
+  rw [List.getElem_cons]
+  split <;> simp_all
+
+theorem BitVec.and_twoPow_eq_zero_of_lt {b : BitVec w} {i : Nat} (h : b < BitVec.twoPow w i) : b &&& BitVec.twoPow w i = 0 := sorry
+
 theorem isUtf8FirstByte_getElem_utf8EncodeChar (c : Char) (i : Nat) (hi : i < (String.utf8EncodeChar c).length) :
     UInt8.IsUtf8FirstByte (String.utf8EncodeChar c)[i] ↔ i = 0 := by
-  fun_cases String.utf8EncodeChar with
+  apply IsGood.getElem
+  clear i hi
+  fun_cases String.utf8EncodeChar c with
   | case1 v h =>
     subst v
-    simp [String.utf8EncodeChar, h] at ⊢ hi
-    simp [hi]
-    sorry
-
-
-  | case2 => sorry
-  | case3 => sorry
-  | case4 => sorry
-
+    apply IsGood.intro
+    · refine Or.inl ?_
+      apply UInt8.eq_of_toBitVec_eq
+      simp only [UInt8.toBitVec_and, UInt32.toBitVec_toUInt8, UInt8.toBitVec_ofNat]
+      apply BitVec.and_twoPow_eq_zero_of_lt (i := 7)
+      apply BitVec.lt_def.2
+      simp only [UInt32.le_iff_toNat_le, UInt32.reduceToNat] at h
+      simp only [BitVec.toNat_setWidth, UInt32.toNat_toBitVec, Nat.reducePow, BitVec.toNat_twoPow,
+        Nat.reduceMod]
+      rw [Nat.mod_eq_of_lt (by omega)]
+      omega
+    · simp
+  | case2 v h₁ h₂ =>
+    subst v
+    apply IsGood.intro
+    · refine Or.inr (Or.inl ?_)
+      rw [UInt8.and_or_distrib_right, UInt8.and_assoc,
+        (by decide : (31 : UInt8) &&& 224 = 0), UInt8.and_zero]
+      decide
+    · simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq]
+      rw [UInt8.IsUtf8FirstByte]
+      simp only [UInt8.eq_iff_toBitVec_eq, UInt8.toBitVec_and, UInt8.toBitVec_or,
+        UInt32.toBitVec_toUInt8, UInt8.toBitVec_ofNat, not_or]
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · exact mt (congrArg (·[7])) (by simp)
+      · exact mt (congrArg (·[6])) (by simp)
+      · exact mt (congrArg (·[6])) (by simp)
+      · exact mt (congrArg (·[6])) (by simp)
+  | case3 v h₁ h₂ h₃ =>
+    subst v
+    apply IsGood.intro
+    · simp only [UInt8.IsUtf8FirstByte]
+      refine Or.inr (Or.inr (Or.inl ?_))
+      rw [UInt8.and_or_distrib_right, UInt8.and_assoc,
+        (by decide : (15 : UInt8) &&& 240 = 0), UInt8.and_zero]
+      decide
+    · simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
+      refine ⟨?_, ?_⟩
+      all_goals
+      · rw [UInt8.IsUtf8FirstByte]
+        simp only [UInt8.eq_iff_toBitVec_eq, UInt8.toBitVec_and, UInt8.toBitVec_or,
+          UInt32.toBitVec_toUInt8, UInt8.toBitVec_ofNat, not_or]
+        refine ⟨?_, ?_, ?_, ?_⟩
+        · exact mt (congrArg (·[7])) (by simp)
+        · exact mt (congrArg (·[6])) (by simp)
+        · exact mt (congrArg (·[6])) (by simp)
+        · exact mt (congrArg (·[6])) (by simp)
+  | case4 v h₁ h₂ h₃ =>
+    subst v
+    apply IsGood.intro
+    · refine Or.inr (Or.inr (Or.inr ?_))
+      rw [UInt8.and_or_distrib_right, UInt8.and_assoc,
+        (by decide : (7 : UInt8) &&& 248 = 0), UInt8.and_zero]
+      decide
+    · simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
+      refine ⟨?_, ?_, ?_⟩
+      all_goals
+      · rw [UInt8.IsUtf8FirstByte]
+        simp only [UInt8.eq_iff_toBitVec_eq, UInt8.toBitVec_and, UInt8.toBitVec_or,
+          UInt32.toBitVec_toUInt8, UInt8.toBitVec_ofNat, not_or]
+        refine ⟨?_, ?_, ?_, ?_⟩
+        · exact mt (congrArg (·[7])) (by simp)
+        · exact mt (congrArg (·[6])) (by simp)
+        · exact mt (congrArg (·[6])) (by simp)
+        · exact mt (congrArg (·[6])) (by simp)
 
 theorem isUtf8FirstByte_getElem_utf8Encode_singleton {c : Char} {i : Nat} {hi : i < [c].utf8Encode.size} :
     UInt8.IsUtf8FirstByte [c].utf8Encode[i] ↔ i = 0 := by

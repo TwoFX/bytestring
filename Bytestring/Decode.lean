@@ -26,16 +26,19 @@ instance : Trans (· ≤ · : UInt8 → UInt8 → Prop) (· < · : UInt8 → UIn
 theorem BitVec.and_or_distrib_left {a b c : BitVec w} : a &&& (b ||| c) = (a &&& b) ||| (a &&& c) :=
   BitVec.eq_of_getElem_eq (by simp [Bool.and_or_distrib_left])
 
-theorem UInt8.add_or_distrib_left {a b c : UInt8} : a &&& (b ||| c) = (a &&& b) ||| (a &&& c) :=
+theorem BitVec.and_or_distrib_right {a b c : BitVec w} : (a ||| b) &&& c = (a &&& c) ||| (b &&& c) :=
+  BitVec.eq_of_getElem_eq (by simp [Bool.and_or_distrib_right])
+
+theorem UInt8.and_or_distrib_left {a b c : UInt8} : a &&& (b ||| c) = (a &&& b) ||| (a &&& c) :=
   UInt8.eq_of_toBitVec_eq (by simp [BitVec.and_or_distrib_left])
 
-  -- UInt8.eq_of_toBitVec_eq (by simp)
-
+theorem UInt8.and_or_distrib_right {a b c : UInt8} : (a ||| b) &&& c = (a &&& c) ||| (b &&& c) :=
+  UInt8.eq_of_toBitVec_eq (by simp [BitVec.and_or_distrib_right])
 
 theorem UInt8.le_of_and_not_eq_zero {b c : UInt8} (h : b &&& ~~~c = 0) : b ≤ c :=
   calc
     b = b &&& (c ||| ~~~c) := by simp
-    _ = b &&& c := by simp only [UInt8.add_or_distrib_left, h, UInt8.or_zero]
+    _ = b &&& c := by simp only [UInt8.and_or_distrib_left, h, UInt8.or_zero]
     _ ≤ c := and_le_right
 
 theorem BitVec.length_pos_of_lt {b b' : BitVec w} (h : b < b') : 0 < w :=
