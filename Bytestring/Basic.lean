@@ -342,6 +342,16 @@ theorem ByteString.validOffset_utf8size {s : ByteString} : s.ValidOffset s.utf8S
 def UInt8.IsUtf8FirstByte (c : UInt8) : Prop :=
   c &&& 0x80 = 0 ∨ c &&& 0xe0 = 0xc0 ∨ c &&& 0xf0 = 0xe0 ∨ c &&& 0xf8 = 0xf0
 
+def UInt8.utf8NumContinuationBytes (c : UInt8) (_h : c.IsUtf8FirstByte) : ByteString.ByteOffset :=
+  if c < 128 then
+    ⟨0⟩
+  else if c &&& 0xe0 == 0xc0 then
+    ⟨1⟩
+  else if c &&& 0xf0 == 0xe0 then
+    ⟨2⟩
+  else
+    ⟨3⟩
+
 theorem ByteString.exists_eq_toByteString (s : ByteString) :
     ∃ l : List Char, s = l.toByteString := by
   rcases s with ⟨_, ⟨⟨l, rfl⟩⟩⟩
@@ -611,3 +621,45 @@ theorem ByteString.validPos_iff_isUtf8FirstByte (s : ByteString) (off : ByteStri
           ext
           simp [ByteString.ByteOffset.lt_iff_numBytes_lt] at ⊢ h'
           omega
+
+deriving instance DecidableEq for ByteString.ByteOffset
+
+structure ByteString.Slice.Pos (s : ByteString.Slice) where
+  offset : ByteOffset
+  validOffset : s.str.ValidOffset (s.startInclusive.offset + offset)
+deriving DecidableEq
+
+def ByteString.Slice.endPos (s : ByteString.Slice) : s.Pos where
+  offset := s.endExclusive.offset
+  validOffset := sorry
+
+theorem ByteString.Slice.Pos.offset_le_offset_endExclusive {s : ByteString.Slice} {pos : s.Pos} :
+    pos.offset ≤ s.endExclusive.offset := sorry
+
+def ByteString.Slice.Pos.byte {s : ByteString.Slice} (pos : s.Pos) (h : pos ≠ s.endPos) : UInt8 := sorry
+
+-- For testing/debugging
+def String.toByteString (s : String) : ByteString :=
+  s.data.toByteString
+
+-- For testing/debugging
+def ByteString.toString (s : ByteString) : String :=
+  ⟨s.data⟩
+
+def ByteString.Slice.Pos.next {s : ByteString.Slice} (pos : s.Pos) (h : pos ≠ s.endPos) : s.Pos where
+  offset := pos.offset + (pos.byte h).utf8NumContinuationBytes sorry
+  validOffset := sorry
+
+def ByteString.Slice.Pos.next? {s : ByteString.Slice} (pos : s.Pos) : Option s.Pos :=
+  if h : pos = s.endPos then none else some (pos.next h)
+
+def ByteString.Pos.toSlice {s : ByteString} (pos : s.Pos) : s.toSlice.Pos where
+  offset := pos.offset
+  validOffset := sorry
+
+def ByteString.Pos.ofSlice {s : ByteString} (pos : s.toSlice.Pos) : s.Pos where
+  offset := pos.offset
+  validOffset := sorry
+
+def ByteString.Pos.next {s : ByteString} (pos : s.Pos) (h : pos ≠ s.endPos) : s.Pos :=
+  .ofSlice (pos.toSlice.next sorry)
