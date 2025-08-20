@@ -1,11 +1,7 @@
-attribute [ext] ByteArray
+import Bytestring.Bootstrap.ByteArray
 
 theorem ByteArray.append_eq_copySlice {a b : ByteArray} :
   a ++ b = b.copySlice 0 a a.size b.size false := rfl
-
-@[simp]
-theorem ByteArray.size_data {a : ByteArray} :
-  a.data.size = a.size := rfl
 
 @[simp]
 theorem ByteArray.data_append {l l' : ByteArray} :
@@ -15,9 +11,6 @@ theorem ByteArray.data_append {l l' : ByteArray} :
 @[simp]
 theorem ByteArray.data_push {a : ByteArray} {b : UInt8} :
     (a.push b).data = a.data.push b := rfl
-
-@[simp]
-theorem ByteArray.data_empty : ByteArray.empty.data = #[] := rfl
 
 @[simp]
 theorem ByteArray.size_empty : ByteArray.empty.size = 0 := by
@@ -94,30 +87,14 @@ theorem ByteArray.drop_eq_extract {b : ByteArray} {i : Nat} :
   b.drop i = b.extract i b.size := rfl
 
 @[simp]
-theorem ByteArray.data_extract {a : ByteArray} {b e : Nat} :
-    (a.extract b e).data = a.data.extract b e := by
-  simp [extract, copySlice]
-  grind
-
-@[simp]
 theorem ByteArray.size_extract {a : ByteArray} {b e : Nat} :
     (a.extract b e).size = min e a.size - b := by
   simp [← size_data]
 
 @[simp]
-theorem ByteArray.extract_size_size {b : ByteArray} : b.extract b.size b.size = ByteArray.empty := by
-  ext1
-  simp
-
-@[simp]
 theorem ByteArray.extract_eq_empty_iff {b : ByteArray} {i j : Nat} : b.extract i j = ByteArray.empty ↔ min j b.size ≤ i := by
   rw [← size_eq_zero_iff, size_extract]
   omega
-
-@[simp]
-theorem ByteArray.extract_zero_size {b : ByteArray} : b.extract 0 b.size = b := by
-  ext1
-  simp
 
 @[simp]
 theorem ByteArray.append_eq_empty_iff {a b : ByteArray} :
@@ -155,3 +132,9 @@ theorem ByteArray.extract_append_eq_right {a b : ByteArray} {i : Nat} (hi : i = 
   subst hi
   ext1
   simp [← size_data]
+
+theorem ByteArray.extract_append_eq_left {a b : ByteArray} {i : Nat} (hi : i = a.size) :
+    (a ++ b).extract 0 i = a := by
+  subst hi
+  ext1
+  simp
