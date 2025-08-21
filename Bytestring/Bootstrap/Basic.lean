@@ -53,6 +53,7 @@ structure ByteString.Slice where
   endExclusive : str.Pos
   startInclusive_le_endExclusive : startInclusive.offset ≤ endExclusive.offset
 
+@[inline]
 def ByteString.toSlice (s : ByteString) : ByteString.Slice where
   str := s
   startInclusive := s.startPos
