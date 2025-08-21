@@ -143,3 +143,12 @@ theorem ByteArray.extract_extract {a : ByteArray} {i j k l : Nat} :
     (a.extract i j).extract k l = a.extract (i + k) (min (i + l) j) := by
   ext1
   simp
+
+theorem ByteArray.getElem_extract_aux {xs : ByteArray} {start stop : Nat} (h : i < (xs.extract start stop).size) :
+    start + i < xs.size := by
+  rw [size_extract] at h; apply Nat.add_lt_of_lt_sub'; apply Nat.lt_of_lt_of_le h
+  apply Nat.sub_le_sub_right; apply Nat.min_le_right
+
+theorem ByteArray.getElem_extract {i : Nat} {b : ByteArray} {start stop : Nat}
+    (h) : (b.extract start stop)[i]'h = b[start + i]'(getElem_extract_aux h) := by
+  simp [getElem_eq_getElem_data]

@@ -240,8 +240,17 @@ theorem exists_of_utf8DecodeChar?_eq_some {b : ByteArray} {c : Char} (h : utf8De
 
 theorem utf8DecodeChar?_eq_utf8DecodeChar?_drop {b : ByteArray} {i : Nat} :
     utf8DecodeChar? b i = utf8DecodeChar? (b.extract i b.size) 0 := by
-  simp only [utf8DecodeChar?]
-  sorry
+  simp [utf8DecodeChar?]
+  have : i < b.size ↔ 0 < b.size - i := by omega
+  have : i + 1 < b.size ↔ 1 < b.size - i := by omega
+  have : i + 2 < b.size ↔ 2 < b.size - i := by omega
+  have : i + 3 < b.size ↔ 3 < b.size - i := by omega
+  have : ∀ h h', b[i]'h = (b.extract i b.size)[0]'h' := by simp [ByteArray.getElem_extract]
+  have : ∀ h h', b[i + 1]'h = (b.extract i b.size)[1]'h' := by simp [ByteArray.getElem_extract]
+  have : ∀ h h', b[i + 2]'h = (b.extract i b.size)[2]'h' := by simp [ByteArray.getElem_extract]
+  have : ∀ h h', b[i + 3]'h = (b.extract i b.size)[3]'h' := by simp [ByteArray.getElem_extract]
+  have : (b.extract i b.size).size = b.size - i := by simp
+  grind
 
 theorem le_size_of_utf8DecodeChar?_eq_some {b : ByteArray} {i : Nat} {c : Char}
     (h : utf8DecodeChar? b i = some c) : i + c.utf8Size ≤ b.size := by
