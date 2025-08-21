@@ -138,3 +138,8 @@ theorem ByteArray.extract_append_eq_left {a b : ByteArray} {i : Nat} (hi : i = a
   subst hi
   ext1
   simp
+
+theorem ByteArray.extract_extract {a : ByteArray} {i j k l : Nat} :
+    (a.extract i j).extract k l = a.extract (i + k) (min (i + l) j) := by
+  ext1
+  simp

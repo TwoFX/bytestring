@@ -227,20 +227,32 @@ theorem utf8DecodeChar?_utf8EncodeChar_append {b : ByteArray} {c : Char} :
   | case3 => sorry
   | case4 => sorry
 
+theorem eq_of_utf8DecodeChar?_eq_some {b : ByteArray} {c : Char} (h : utf8DecodeChar? b 0 = some c) :
+    b = (String.utf8EncodeChar c).toByteArray ++ b.extract c.utf8Size b.size := by
+  ext
+  simp
+  sorry
+  sorry
+
 theorem exists_of_utf8DecodeChar?_eq_some {b : ByteArray} {c : Char} (h : utf8DecodeChar? b 0 = some c) :
-    ∃ l, b = (String.utf8EncodeChar c).toByteArray ++ l := sorry
+    ∃ l, b = (String.utf8EncodeChar c).toByteArray ++ l :=
+  ⟨b.extract c.utf8Size b.size, eq_of_utf8DecodeChar?_eq_some h⟩
 
 theorem utf8DecodeChar?_eq_utf8DecodeChar?_drop {b : ByteArray} {i : Nat} :
     utf8DecodeChar? b i = utf8DecodeChar? (b.extract i b.size) 0 := by
   simp only [utf8DecodeChar?]
   sorry
 
-theorem le_size_of_utf8DecodeChar?_eq_some {b : ByteArray} {i : Nat} (hi : i ≤ b.size) {c : Char}
+theorem le_size_of_utf8DecodeChar?_eq_some {b : ByteArray} {i : Nat} {c : Char}
     (h : utf8DecodeChar? b i = some c) : i + c.utf8Size ≤ b.size := by
   rw [utf8DecodeChar?_eq_utf8DecodeChar?_drop] at h
   obtain ⟨l, hl⟩ := exists_of_utf8DecodeChar?_eq_some h
   replace hl := congrArg ByteArray.size hl
   simp at hl
+  have hi : i < b.size := by
+    simp [utf8DecodeChar?] at h
+    obtain ⟨h, -⟩ := h
+    omega
   omega
 
 end decode
