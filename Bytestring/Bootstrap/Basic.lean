@@ -51,8 +51,11 @@ structure ByteString.Slice where
   str : ByteString
   startInclusive : str.Pos
   endExclusive : str.Pos
+  startInclusive_le_endExclusive : startInclusive.offset ≤ endExclusive.offset
 
 def ByteString.toSlice (s : ByteString) : ByteString.Slice where
   str := s
   startInclusive := s.startPos
   endExclusive := s.endPos
+  startInclusive_le_endExclusive := by
+    simp [ByteString.ByteOffset.le_iff_numBytes_le, startPos]

@@ -342,6 +342,14 @@ theorem ByteString.validOffset_utf8size {s : ByteString} : s.ValidOffset s.utf8S
 def UInt8.IsUtf8FirstByte (c : UInt8) : Prop :=
   c &&& 0x80 = 0 ∨ c &&& 0xe0 = 0xc0 ∨ c &&& 0xf0 = 0xe0 ∨ c &&& 0xf8 = 0xf0
 
+@[inline]
+def UInt8.isUtf8FirstByte (c : UInt8) : Bool :=
+  c &&& 0x80 == 0 || c &&& 0xe0 == 0xc0 || c &&& 0xf0 = 0xe0 || c &&& 0xf8 == 0xf0
+
+theorem UInt8.isUtf8FirstByte_eq_true {c : UInt8} :
+    c.isUtf8FirstByte = true ↔ c.IsUtf8FirstByte := by
+  grind [IsUtf8FirstByte, isUtf8FirstByte]
+
 def UInt8.utf8NumContinuationBytes (c : UInt8) (_h : c.IsUtf8FirstByte) : ByteString.ByteOffset :=
   if c < 128 then
     ⟨0⟩
@@ -375,6 +383,9 @@ instance : Sub ByteString.ByteOffset where
 
 instance : LT ByteString.ByteOffset where
   lt a b := a.numBytes < b.numBytes
+
+instance : DecidableLT ByteString.ByteOffset :=
+  inferInstanceAs (∀ a b : ByteString.ByteOffset, Decidable (a.numBytes < b.numBytes))
 
 @[simp]
 theorem ByteString.ByteOffset.numBytes_add {a b : ByteString.ByteOffset} :
@@ -592,7 +603,7 @@ theorem ByteString.validOffset_push {s : ByteString} {c : Char} {off : ByteStrin
 theorem ByteString.push_induction (s : ByteString) (motive : ByteString → Prop) (empty : motive ByteString.empty)
     (push : ∀ b c, motive b → motive (b.push c)) : motive s := sorry
 
-theorem ByteString.validPos_iff_isUtf8FirstByte (s : ByteString) (off : ByteString.ByteOffset) :
+theorem ByteString.validOffset_iff_isUtf8FirstByte (s : ByteString) (off : ByteString.ByteOffset) :
     s.ValidOffset off ↔
       (off = s.utf8Size ∨ (∃ (h : off < s.utf8Size), UInt8.IsUtf8FirstByte (s.utf8ByteAt off h))) := by
   induction s using ByteString.push_induction with
@@ -624,14 +635,95 @@ theorem ByteString.validPos_iff_isUtf8FirstByte (s : ByteString) (off : ByteStri
 
 deriving instance DecidableEq for ByteString.ByteOffset
 
+@[inline]
+def ByteString.Slice.utf8Size (s : ByteString.Slice) : ByteString.ByteOffset :=
+  s.endExclusive.offset - s.startInclusive.offset
+
+structure ByteString.Slice.ValidOffset (s : ByteString.Slice) (off : ByteString.ByteOffset) : Prop where
+  le_utf8Size : off ≤ s.utf8Size
+  validOffset_add : s.str.ValidOffset (s.startInclusive.offset + off)
+
+theorem ByteString.Slice.validOffset_iff_le_utf8Size_and_validOffset_add {s : ByteString.Slice} {off : ByteString.ByteOffset} :
+    s.ValidOffset off ↔ off ≤ s.utf8Size ∧ s.str.ValidOffset (s.startInclusive.offset + off) :=
+  ⟨fun h => ⟨h.1, h.2⟩, fun ⟨h₁, h₂⟩ => ⟨h₁, h₂⟩⟩
+
 structure ByteString.Slice.Pos (s : ByteString.Slice) where
   offset : ByteOffset
-  validOffset : s.str.ValidOffset (s.startInclusive.offset + offset)
+  validOffset : s.ValidOffset offset
 deriving DecidableEq
 
-def ByteString.Slice.endPos (s : ByteString.Slice) : s.Pos where
-  offset := s.endExclusive.offset
+@[simp]
+theorem ByteString.Slice.numBytes_utf8Size {s : ByteString.Slice} : s.utf8Size.numBytes = s.endExclusive.offset.numBytes - s.startInclusive.offset.numBytes := by
+  simp [utf8Size]
+
+def ByteString.Slice.utf8ByteAt (s : ByteString.Slice) (off : ByteString.ByteOffset) (h : off < s.utf8Size) : UInt8 :=
+  s.str.utf8ByteAt (s.startInclusive.offset + off) (by
+    -- TODO: probably there is some lemma to extract here
+    have := s.endExclusive.validOffset.1
+    simp [ByteString.ByteOffset.lt_iff_numBytes_lt, ByteString.ByteOffset.le_iff_numBytes_le] at *
+    omega)
+
+def ByteString.Slice.startPos (s : ByteString.Slice) : s.Pos where
+  offset := 0
   validOffset := sorry
+
+instance {s : ByteString.Slice} : Inhabited s.Pos where
+  default := s.startPos
+
+def ByteString.Slice.endPos (s : ByteString.Slice) : s.Pos where
+  offset := s.utf8Size
+  validOffset := sorry
+
+theorem ByteString.Slice.validOffset_iff_isUtf8FirstByte (s : ByteString.Slice) (off : ByteString.ByteOffset) :
+    s.ValidOffset off ↔ (off = s.utf8Size ∨ (∃ (h : off < s.utf8Size), UInt8.IsUtf8FirstByte (s.utf8ByteAt off h))) := by
+  rw [Slice.validOffset_iff_le_utf8Size_and_validOffset_add, ByteString.validOffset_iff_isUtf8FirstByte]
+  refine ⟨?_, ?_⟩
+  · simp only [ByteString.Slice.utf8ByteAt, ByteString.ByteOffset.le_iff_numBytes_le, ByteString.ByteOffset.ext_iff]
+    simp only [ByteOffset.numBytes_add, numBytes_utf8Size, Slice.numBytes_utf8Size]
+    rintro ⟨h₁, (h₂|⟨h₂, h₂'⟩)⟩
+    · have := s.endExclusive.validOffset.1
+      simp only [ByteOffset.le_iff_numBytes_le] at this
+      exact Or.inl (by omega)
+    · grind [ByteOffset.lt_iff_numBytes_lt, Slice.numBytes_utf8Size]
+  · rintro (rfl|⟨h₁, h₂⟩)
+    · simp only [ByteString.ByteOffset.le_iff_numBytes_le, ByteString.ByteOffset.ext_iff]
+      simp only [ByteOffset.numBytes_add, numBytes_utf8Size, Slice.numBytes_utf8Size]
+      refine ⟨by omega, ?_⟩
+      have := s.startInclusive_le_endExclusive
+      simp [ByteOffset.le_iff_numBytes_le] at this
+      obtain (h'|⟨h', h''⟩) := (ByteString.validOffset_iff_isUtf8FirstByte _ _).1 s.endExclusive.validOffset
+      · simp [ByteOffset.ext_iff] at h'
+        simp only [ByteString.numBytes_utf8Size]
+        omega
+      · refine Or.inr ⟨?_, ?_⟩
+        · simp [Slice.utf8Size, ByteString.ByteOffset.lt_iff_numBytes_lt] at ⊢ h'
+          omega
+        · simp [Slice.utf8Size, ByteString.ByteOffset.lt_iff_numBytes_lt] at ⊢ h'
+          have : (s.startInclusive.offset + (s.endExclusive.offset - s.startInclusive.offset)) = s.endExclusive.offset := by
+            ext
+            simp
+            omega
+          grind
+    · refine ⟨?_, Or.inr ⟨?_, ?_⟩⟩
+      · grind [ByteOffset.le_iff_numBytes_le, ByteOffset.lt_iff_numBytes_lt]
+      · have h₃ := s.startInclusive_le_endExclusive
+        have h₄ := s.endExclusive.validOffset.1
+        simp [ByteOffset.le_iff_numBytes_le, ByteOffset.lt_iff_numBytes_lt, utf8Size] at h₁ ⊢ h₃ h₄
+        omega
+      · exact h₂
+
+@[inline]
+def ByteString.Slice.isValidOffset (s : ByteString.Slice) (off : ByteString.ByteOffset) : Bool :=
+  if off = s.utf8Size then
+    true
+  else if h : off < s.utf8Size then
+    (s.utf8ByteAt off h).isUtf8FirstByte
+  else
+    false
+
+theorem ByteString.Slice.isValidOffset_eq_true {s : ByteString.Slice} {off : ByteString.ByteOffset} :
+    s.isValidOffset off = true ↔ s.ValidOffset off := by
+  fun_cases ByteString.Slice.isValidOffset with grind [UInt8.isUtf8FirstByte_eq_true, ByteString.Slice.validOffset_iff_isUtf8FirstByte]
 
 theorem ByteString.Slice.Pos.offset_le_offset_endExclusive {s : ByteString.Slice} {pos : s.Pos} :
     pos.offset ≤ s.endExclusive.offset := sorry
@@ -663,3 +755,19 @@ def ByteString.Pos.ofSlice {s : ByteString} (pos : s.toSlice.Pos) : s.Pos where
 
 def ByteString.Pos.next {s : ByteString} (pos : s.Pos) (h : pos ≠ s.endPos) : s.Pos :=
   .ofSlice (pos.toSlice.next sorry)
+
+def ByteString.Slice.pos (s : ByteString.Slice) (off : ByteString.ByteOffset) (h : s.ValidOffset off) : s.Pos where
+  offset := off
+  validOffset := h
+
+def ByteString.Slice.pos? (s : ByteString.Slice) (off : ByteString.ByteOffset) : Option s.Pos :=
+  if h : s.isValidOffset off then
+    some (s.pos off (s.isValidOffset_eq_true.1 h))
+  else
+    none
+
+def ByteString.Slice.pos! (s : ByteString.Slice) (off : ByteString.ByteOffset) : s.Pos :=
+  if h : s.isValidOffset off then
+    s.pos off (s.isValidOffset_eq_true.1 h)
+  else
+    panic! "Offset is not at a valid UTF-8 character boundary"
