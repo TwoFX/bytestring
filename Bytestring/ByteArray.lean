@@ -121,8 +121,6 @@ theorem ByteArray.extract_eq_extract_append_extract {a : ByteArray} {i k : Nat} 
     a.extract i k = a.extract i j ++ a.extract j k := by
   simp; grind
 
---  {α : Type u_1} {xs₁ xs₂ ys₁ ys₂ : Array α} (h : xs₁ ++ ys₁ = xs₂ ++ ys₂) (hl : xs₁.size = xs₂.size) : xs₁ = xs₂
-
 theorem ByteArray.append_inj_left {xs₁ xs₂ ys₁ ys₂ : ByteArray} (h : xs₁ ++ ys₁ = xs₂ ++ ys₂) (hl : xs₁.size = xs₂.size) : xs₁ = xs₂ := by
   simp only [ByteArray.ext_iff, ← ByteArray.size_data, ByteArray.data_append] at *
   exact Array.append_inj_left h hl
@@ -152,3 +150,34 @@ theorem ByteArray.getElem_extract_aux {xs : ByteArray} {start stop : Nat} (h : i
 theorem ByteArray.getElem_extract {i : Nat} {b : ByteArray} {start stop : Nat}
     (h) : (b.extract start stop)[i]'h = b[start + i]'(getElem_extract_aux h) := by
   simp [getElem_eq_getElem_data]
+
+theorem ByteArray.extract_eq_extract_left {a : ByteArray} {i i' j : Nat} :
+    a.extract i j = a.extract i' j ↔ min j a.size - i = min j a.size - i' := by
+  simp [ByteArray.ext_iff, Array.extract_eq_extract_left]
+
+theorem ByteArray.extract_add_one {a : ByteArray} {i : Nat} (ha : i + 1 ≤ a.size) :
+    a.extract i (i + 1) = [a[i]].toByteArray := by
+  ext
+  · simp
+    omega
+  · rename_i j hj hj'
+    obtain rfl : j = 0 := by simpa using hj'
+    simp [ByteArray.getElem_eq_getElem_data]
+
+theorem ByteArray.extract_add_two {a : ByteArray} {i : Nat} (ha : i + 2 ≤ a.size) :
+    a.extract i (i + 2) = [a[i], a[i + 1]].toByteArray := by
+  rw [extract_eq_extract_append_extract (i + 1) (by simp) (by omega),
+    extract_add_one (by omega), extract_add_one (by omega)]
+  simp [← List.toByteArray_append]
+
+theorem ByteArray.extract_add_three {a : ByteArray} {i : Nat} (ha : i + 3 ≤ a.size) :
+    a.extract i (i + 3) = [a[i], a[i + 1], a[i + 2]].toByteArray := by
+  rw [extract_eq_extract_append_extract (i + 1) (by simp) (by omega),
+    extract_add_one (by omega), extract_add_two (by omega)]
+  simp [← List.toByteArray_append]
+
+theorem ByteArray.extract_add_four {a : ByteArray} {i : Nat} (ha : i + 4 ≤ a.size) :
+    a.extract i (i + 4) = [a[i], a[i + 1], a[i + 2], a[i + 3]].toByteArray := by
+  rw [extract_eq_extract_append_extract (i + 1) (by simp) (by omega),
+    extract_add_one (by omega), extract_add_three (by omega)]
+  simp [← List.toByteArray_append]
