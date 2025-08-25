@@ -1,4 +1,5 @@
 import Bytestring.Basic
+import Bytestring.HenrikWants
 
 namespace ByteString
 namespace Slice
@@ -406,11 +407,11 @@ instance (s : Slice) : Std.Iterators.Iterator (BackwardCharSearcher s) Id (Searc
         | .matched startPos endPos =>
           it.internalState.currPos = endPos ∧
           it'.internalState.currPos = startPos ∧
-          (it.internalState.currPos.prev h1).get sorry = it.internalState.needle
+          (it.internalState.currPos.prev h1).get (prev_ne_endPos h1) = it.internalState.needle
         | .rejected startPos endPos =>
           it.internalState.currPos = endPos ∧
           it'.internalState.currPos = startPos ∧
-          (it.internalState.currPos.prev h1).get sorry ≠ it.internalState.needle
+          (it.internalState.currPos.prev h1).get (prev_ne_endPos h1) ≠ it.internalState.needle
     | .skip _ => False
     | .done => it.internalState.currPos = s.startPos
   step := fun ⟨currPos, needle⟩ =>
@@ -419,8 +420,7 @@ instance (s : Slice) : Std.Iterators.Iterator (BackwardCharSearcher s) Id (Searc
     else
       let nextPos := currPos.prev h1
       let nextIt := ⟨nextPos, needle⟩
-      -- TODO: this needs prev ≠ endPos
-      if h2 : nextPos.get sorry = needle then
+      if h2 : nextPos.get (prev_ne_endPos h1) = needle then
         pure ⟨.yield nextIt (.matched nextPos currPos), by simp [h1, h2, nextIt, nextPos]⟩
       else
         pure ⟨.yield nextIt (.rejected nextPos currPos), by simp [h1, h2, nextIt, nextPos]⟩
@@ -465,11 +465,11 @@ instance (s : Slice) : Std.Iterators.Iterator (BackwardCharPredSearcher s) Id (S
         | .matched startPos endPos =>
           it.internalState.currPos = endPos ∧
           it'.internalState.currPos = startPos ∧
-          it.internalState.needle ((it.internalState.currPos.prev h1).get sorry)
+          it.internalState.needle ((it.internalState.currPos.prev h1).get (prev_ne_endPos h1))
         | .rejected startPos endPos =>
           it.internalState.currPos = endPos ∧
           it'.internalState.currPos = startPos ∧
-          ¬ it.internalState.needle ((it.internalState.currPos.prev h1).get sorry)
+          ¬ it.internalState.needle ((it.internalState.currPos.prev h1).get (prev_ne_endPos h1))
     | .skip _ => False
     | .done => it.internalState.currPos = s.startPos
   step := fun ⟨currPos, needle⟩ =>
@@ -478,8 +478,7 @@ instance (s : Slice) : Std.Iterators.Iterator (BackwardCharPredSearcher s) Id (S
     else
       let nextPos := currPos.prev h1
       let nextIt := ⟨nextPos, needle⟩
-      -- TODO: this needs prev ≠ endPos
-      if h2 : needle <| nextPos.get sorry then
+      if h2 : needle <| nextPos.get (prev_ne_endPos h1) then
         pure ⟨.yield nextIt (.matched nextPos currPos), by simp [h1, h2, nextIt, nextPos]⟩
       else
         pure ⟨.yield nextIt (.rejected nextPos currPos), by simp [h1, h2, nextIt, nextPos]⟩
@@ -514,7 +513,7 @@ where
     if h : sCurr ≠ s.startPos ∧ patCurr ≠ pat.startPos then
       let sPrev := sCurr.prev h.left
       let patPrev := patCurr.prev h.right
-      if (sPrev.get sorry) == (patPrev.get sorry) then
+      if sPrev.get (prev_ne_endPos h.left) == patPrev.get (prev_ne_endPos h.right) then
         go s sPrev pat patPrev
       else
         false
@@ -532,7 +531,7 @@ where
       if h2 : sCurr ≠ s.startPos then
         let sPrev := sCurr.prev h2
         let patPrev := patCurr.prev h1
-        if (sPrev.get sorry) == (patPrev.get sorry) then
+        if sPrev.get (prev_ne_endPos h2) == patPrev.get (prev_ne_endPos h1) then
           go s sPrev pat patPrev
         else
           none
