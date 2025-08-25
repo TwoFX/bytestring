@@ -258,15 +258,25 @@ theorem ByteArray.utf8Decode?_utf8Encode_singleton_append {l : ByteArray} {c : C
     simp [List.utf8Encode_singleton]
 
 @[simp]
-theorem List.data_toByteString {l : List Char} : l.toByteString.data = l := by
+theorem List.utf8Decode?_utf8Encode {l : List Char} :
+    l.utf8Encode.utf8Decode? = some l.toArray := by
   induction l with
   | nil => simp
   | cons c l ih =>
-    rw [← List.singleton_append, List.toByteString_append,
-      ByteString.data, ByteString.toCharArray]
-    simp only [ByteString.bytes_append]
-    simp only [bytes_toByteString, cons_append, nil_append]
-    simpa [ByteArray.utf8Decode?_utf8Encode_singleton_append] using ih
+    rw [← List.singleton_append, List.utf8Encode_append]
+    simp only [ByteArray.utf8Decode?_utf8Encode_singleton_append, cons_append, nil_append,
+      Option.map_eq_some_iff, Array.append_eq_toArray_iff, cons.injEq, true_and]
+    refine ⟨l.toArray, ih, by simp⟩
+
+@[simp]
+theorem ByteArray.utf8Encode_get_utf8Decode? {b : ByteArray} {h} :
+    (b.utf8Decode?.get h).toList.utf8Encode = b := by
+  obtain ⟨l, rfl⟩ := isSome_utf8Decode?_iff.1 h
+  simp
+
+@[simp]
+theorem List.data_toByteString {l : List Char} : l.toByteString.data = l := by
+  simp [toByteString, ByteString.data, ByteString.toCharArray]
 
 @[simp]
 theorem ByteString.toByteString_data {b : ByteString} : b.data.toByteString = b := by
@@ -304,16 +314,16 @@ theorem ByteString.validOffset_zero {s : ByteString} : s.ValidOffset 0 where
 @[simp]
 theorem ByteString.utf8Size_empty : ByteString.empty.utf8Size = 0 := rfl
 
-def ByteString.Pos.toString {s : ByteString} (pos : s.Pos) : ByteString where
-  bytes := s.bytes.extract 0 pos.1.numBytes
-  isValidUtf8 := pos.2.2
+-- def ByteString.Pos.toString {s : ByteString} (pos : s.Pos) : ByteString where
+--   bytes := s.bytes.extract 0 pos.1.numBytes
+--   isValidUtf8 := pos.2.2
 
-@[simp]
-theorem ByteString.Pos.bytes_toString {s : ByteString} {pos : s.Pos} :
-    pos.toString.bytes = s.bytes.extract 0 pos.1.numBytes := rfl
+-- @[simp]
+-- theorem ByteString.Pos.bytes_toString {s : ByteString} {pos : s.Pos} :
+--     pos.toString.bytes = s.bytes.extract 0 pos.1.numBytes := rfl
 
-def ByteString.Pos.idx {s : ByteString} (pos : s.Pos) : Nat :=
-  pos.toString.length
+-- def ByteString.Pos.idx {s : ByteString} (pos : s.Pos) : Nat :=
+--   pos.toString.length
 
 theorem ByteString.extract_bytes_of_isPrefix (s : ByteString) (l : List Char) (hl : l <+: s.data) :
     s.bytes.extract 0 l.utf8Encode.size = l.utf8Encode := by
@@ -321,23 +331,23 @@ theorem ByteString.extract_bytes_of_isPrefix (s : ByteString) (l : List Char) (h
   rw [← toByteString_data (b := s), List.bytes_toByteString, ← hk, List.utf8Encode_append,
     ByteArray.extract_append_eq_left rfl]
 
-theorem ByteString.Pos.utf8Size_toString {s : ByteString} (pos : s.Pos) :
-    pos.toString.utf8Size = pos.offset := sorry
+-- theorem ByteString.Pos.utf8Size_toString {s : ByteString} (pos : s.Pos) :
+--     pos.toString.utf8Size = pos.offset := sorry
 
-theorem ByteString.Pos.data_toString {s : ByteString} (pos : s.Pos) :
-    pos.toString.data = s.data.take pos.idx := by
+-- theorem ByteString.Pos.data_toString {s : ByteString} (pos : s.Pos) :
+--     pos.toString.data = s.data.take pos.idx := by
 
-  apply List.toByteString_injective
-  ext1
-  simp only [toByteString_data, bytes_toString, List.bytes_toByteString]
-  conv => rhs; rw [← ByteString.extract_bytes_of_isPrefix s (s.data.take _) (List.take_prefix _ _)]
-  congr 1
+--   apply List.toByteString_injective
+--   ext1
+--   simp only [toByteString_data, bytes_toString, List.bytes_toByteString]
+--   conv => rhs; rw [← ByteString.extract_bytes_of_isPrefix s (s.data.take _) (List.take_prefix _ _)]
+--   congr 1
 
-  sorry
+--   sorry
 
 
-theorem ByteString.Pos.idx_le_length {s : ByteString} (pos : s.Pos) : pos.idx ≤ s.length := by
-  sorry
+-- theorem ByteString.Pos.idx_le_length {s : ByteString} (pos : s.Pos) : pos.idx ≤ s.length := by
+--   sorry
 
 theorem List.IsPrefix.flatMap {l₁ l₂ : List α} {f : α → List β} (h : l₁ <+: l₂) : l₁.flatMap f <+: l₂.flatMap f := by
   obtain ⟨k, rfl⟩ := h
@@ -348,22 +358,87 @@ theorem List.IsPrefix.utf8Size_toByteString_le {l₁ l₂ : List Char} (h : l₁
   simp only [utf8Encode, size_toByteArray]
   exact h.flatMap.length_le
 
--- TODO: this implementation is inefficient, the alternative is to call `Pos.next` `n` times
-def ByteString.nthPos (s : ByteString) (n : Nat) (_hn : n ≤ s.length) : s.Pos where
-  offset := (s.data.take n).toByteString.utf8Size
-  validOffset := {
-    le_utf8Size := by
-      conv => rhs; rw [← toByteString_data (b := s)]
-      apply List.IsPrefix.utf8Size_toByteString_le
-      exact List.take_prefix n s.data
-    isValidUtf8 := by
-      simp only [numBytes_utf8Size, List.bytes_toByteString]
-      rw [ByteString.extract_bytes_of_isPrefix _ _ (List.take_prefix n s.data)]
-      exact isValidUtf8_utf8Encode
-  }
+-- -- TODO: this implementation is inefficient, the alternative is to call `Pos.next` `n` times
+-- def ByteString.nthPos (s : ByteString) (n : Nat) (_hn : n ≤ s.length) : s.Pos where
+--   offset := (s.data.take n).toByteString.utf8Size
+--   validOffset := {
+--     le_utf8Size := by
+--       conv => rhs; rw [← toByteString_data (b := s)]
+--       apply List.IsPrefix.utf8Size_toByteString_le
+--       exact List.take_prefix n s.data
+--     isValidUtf8 := by
+--       simp only [numBytes_utf8Size, List.bytes_toByteString]
+--       rw [ByteString.extract_bytes_of_isPrefix _ _ (List.take_prefix n s.data)]
+--       exact isValidUtf8_utf8Encode
+--   }
 
-theorem ByteString.IsValidOffset.isValidUtf8' (s : ByteString) (off : ByteOffset) :
-    IsValidUtf8 (s.bytes.extract off.numBytes s.bytes.size) := sorry
+
+@[simp]
+theorem ByteString.ByteOffset.numBytes_add {a b : ByteString.ByteOffset} :
+    (a + b).numBytes = a.numBytes + b.numBytes := rfl
+
+@[simp]
+theorem ByteString.ByteOffset.numBytes_sub {a b : ByteString.ByteOffset} :
+    (a - b).numBytes = a.numBytes - b.numBytes := rfl
+
+@[simp]
+theorem ByteString.utf8Size_append {s t : ByteString} : (s ++ t).utf8Size = s.utf8Size + t.utf8Size := by
+  ext
+  simp
+
+theorem List.isPrefix_of_utf8Encode_append_eq_utf8Encode {l m : List Char} (b : ByteArray) (h : l.utf8Encode ++ b = m.utf8Encode) : l <+: m := by
+  induction l generalizing m with
+  | nil => simp
+  | cons c l ih =>
+    replace h := congrArg ByteArray.utf8Decode? h
+    rw [utf8Decode?_utf8Encode] at h
+    rw [← List.singleton_append, utf8Encode_append, ByteArray.append_assoc,
+      ByteArray.utf8Decode?_utf8Encode_singleton_append] at h
+    suffices ∃ m', m = [c] ++ m' ∧ l.utf8Encode ++ b = m'.utf8Encode by
+      obtain ⟨m', rfl, hm'⟩ := this
+      simpa using ih hm'
+    have hx : (l.utf8Encode ++ b).utf8Decode?.isSome := by
+      exact Option.isSome_map ▸ Option.isSome_of_eq_some h
+    refine ⟨(l.utf8Encode ++ b).utf8Decode?.get hx |>.toList, ?_, by simp⟩
+    exact List.toArray_inj (Option.some_inj.1 (by simp [← h]))
+
+theorem ByteString.ValidOffset.exists {s : ByteString} {off : ByteOffset} (h : s.ValidOffset off) :
+    ∃ m₁ m₂ : List Char, m₁.utf8Encode = s.bytes.extract 0 off.numBytes ∧ (m₁ ++ m₂).toByteString = s := by
+  obtain ⟨⟨l, hl⟩⟩ := s.isValidUtf8
+  obtain ⟨⟨m₁, hm₁⟩⟩ := h.isValidUtf8
+  suffices m₁ <+: l by
+    obtain ⟨m₂, rfl⟩ := this
+    refine ⟨m₁, m₂, hm₁.symm, ?_⟩
+    ext1
+    simpa using hl.symm
+  apply List.isPrefix_of_utf8Encode_append_eq_utf8Encode (s.bytes.extract off.numBytes s.bytes.size)
+  rw [← hl, ← hm₁, ← ByteArray.extract_eq_extract_append_extract _ (by simp),
+    ByteArray.extract_zero_size]
+  simpa [ByteOffset.le_iff_numBytes_le] using h.le_utf8Size
+
+theorem ByteString.ValidOffset.isValidUtf8' {s : ByteString} {off : ByteOffset} (h : s.ValidOffset off) :
+    IsValidUtf8 (s.bytes.extract off.numBytes s.bytes.size) := by
+  obtain ⟨m₁, m₂, hm, rfl⟩ := h.exists
+  simp only [List.toByteString_append, bytes_append, List.bytes_toByteString]
+  rw [ByteArray.extract_append_eq_right]
+  · exact isValidUtf8_utf8Encode
+  · rw [hm]
+    simp only [List.toByteString_append, bytes_append, List.bytes_toByteString,
+      ByteArray.size_extract, ByteArray.size_append, Nat.sub_zero]
+    refine (Nat.min_eq_left ?_).symm
+    simpa [ByteOffset.le_iff_numBytes_le] using h.le_utf8Size
+
+theorem ByteString.isValidOffset_iff_exists_append {s : ByteString} {off : ByteOffset} :
+    s.ValidOffset off ↔ ∃ s₁ s₂ : ByteString, s = s₁ ++ s₂ ∧ off = s₁.utf8Size := by
+  refine ⟨fun h => ⟨⟨_, h.isValidUtf8⟩, ⟨_, h.isValidUtf8'⟩, ?_, ?_⟩, ?_⟩
+  · ext1
+    have := ByteString.ByteOffset.le_iff_numBytes_le.1 h.le_utf8Size
+    simp_all
+  · have := ByteString.ByteOffset.le_iff_numBytes_le.1 h.le_utf8Size
+    simp_all [utf8Size]
+  · rintro ⟨s₁, s₂, rfl, rfl⟩
+    refine ⟨by simp [ByteOffset.le_iff_numBytes_le], ?_⟩
+    simpa [ByteArray.extract_append_eq_left] using s₁.isValidUtf8
 
 @[simp, grind]
 theorem ByteString.validOffset_empty {offset : ByteOffset} :
@@ -378,7 +453,17 @@ theorem ByteString.validOffset_empty {offset : ByteOffset} :
 
 theorem List.validOffset_toByteString {l : List Char} {offset : ByteString.ByteOffset} :
     l.toByteString.ValidOffset offset ↔ ∃ i, offset = (l.take i).toByteString.utf8Size := by
-  sorry
+  rw [ByteString.isValidOffset_iff_exists_append]
+  refine ⟨?_, ?_⟩
+  · rintro ⟨t₁, t₂, ht, rfl⟩
+    refine ⟨t₁.length, ?_⟩
+    have := congrArg ByteString.data ht
+    simp only [data_toByteString, ByteString.data_append] at this
+    subst this
+    simp [← ByteString.size_toCharArray]
+  · rintro ⟨i, rfl⟩
+    refine ⟨(l.take i).toByteString, (l.drop i).toByteString, ?_, rfl⟩
+    simp [← List.toByteString_append]
 
 @[simp, grind]
 theorem ByteString.validOffset_utf8size {s : ByteString} : s.ValidOffset s.utf8Size where
@@ -416,24 +501,11 @@ def ByteString.push (b : ByteString) (c : Char) : ByteString where
 @[simp]
 theorem ByteString.bytes_push {s : ByteString} {c : Char} : (s.push c).bytes = s.bytes ++ [c].utf8Encode := rfl
 
-@[simp]
-theorem ByteString.ByteOffset.numBytes_add {a b : ByteString.ByteOffset} :
-    (a + b).numBytes = a.numBytes + b.numBytes := rfl
-
-@[simp]
-theorem ByteString.ByteOffset.numBytes_sub {a b : ByteString.ByteOffset} :
-    (a - b).numBytes = a.numBytes - b.numBytes := rfl
-
 theorem ByteString.ByteOffset.lt_iff_numBytes_lt {a b : ByteString.ByteOffset} :
     a < b ↔ a.numBytes < b.numBytes := Iff.rfl
 
 def ByteString.utf8ByteAt (s : ByteString) (off : ByteString.ByteOffset) (h : off < s.utf8Size) : UInt8 :=
   s.bytes[off.numBytes]
-
-@[simp]
-theorem ByteString.utf8Size_append {s t : ByteString} : (s ++ t).utf8Size = s.utf8Size + t.utf8Size := by
-  ext
-  simp
 
 def Char.utf8Size' (c : Char) : ByteString.ByteOffset :=
   ⟨c.utf8Size⟩
@@ -689,7 +761,7 @@ def ByteString.Slice.utf8ByteAt (s : ByteString.Slice) (off : ByteString.ByteOff
     simp [ByteString.ByteOffset.lt_iff_numBytes_lt, ByteString.ByteOffset.le_iff_numBytes_le] at *
     omega)
 
-theorem ByteString.Slice.isUtf8FirstBytte_utf8ByteAt_zero {s : ByteString.Slice} (h : 0 < s.utf8Size) :
+theorem ByteString.Slice.isUtf8FirstByte_utf8ByteAt_zero {s : ByteString.Slice} (h : 0 < s.utf8Size) :
     (s.utf8ByteAt 0 h).IsUtf8FirstByte := sorry
 
 def ByteString.Slice.startPos (s : ByteString.Slice) : s.Pos where
@@ -847,7 +919,7 @@ where
       have : 0 ≠ off.numBytes := by
         intro h
         obtain rfl : off = 0 := by simpa [ByteOffset.ext_iff] using h.symm
-        simp [UInt8.isUtf8FirstByte_eq_true.2 (s.isUtf8FirstBytte_utf8ByteAt_zero h₁)] at hbyte
+        simp [UInt8.isUtf8FirstByte_eq_true.2 (s.isUtf8FirstByte_utf8ByteAt_zero h₁)] at hbyte
       go ⟨off.numBytes - 1⟩ (by simp [ByteOffset.lt_iff_numBytes_lt] at ⊢ h₁; omega)
   termination_by off.numBytes
 

@@ -181,3 +181,32 @@ theorem ByteArray.extract_add_four {a : ByteArray} {i : Nat} (ha : i + 4 ≤ a.s
   rw [extract_eq_extract_append_extract (i + 1) (by simp) (by omega),
     extract_add_one (by omega), extract_add_three (by omega)]
   simp [← List.toByteArray_append]
+
+theorem ByteArray.append_assoc {a b c : ByteArray} : a ++ b ++ c = a ++ (b ++ c) := by
+  ext1
+  simp
+
+@[simp]
+theorem ByteArray.toList_empty : ByteArray.empty.toList = [] := by
+  simp [ByteArray.toList, ByteArray.toList.loop]
+
+-- @[simp]
+-- theorem List.toList_toByteArray {a : List UInt8} : a.toByteArray.toList = a := by
+--   sorry
+
+-- theorem ByteArray.data_toLi
+
+-- @[simp]
+-- theorem ByteArray.toArray_toList {a : ByteArray} : a.toList.toArray = a.data := by
+--   sorry
+
+
+-- @[simp]
+-- theorem ByteArray.toByteArray_toList {a : ByteArray} : a.toList.toByteArray = a := by
+--   ext1
+--   simp
+
+-- @[simp]
+-- theorem ByteArray.toList_extract {a : ByteArray} {i j : Nat} : (a.extract i j).toList = a.toList.extract i j := by
+--   apply List.toArray_inj
+--   simp [-List.extract_eq_drop_take, ← List.extract_toArray]
