@@ -672,6 +672,7 @@ theorem ByteString.Slice.validOffset_iff_le_utf8Size_and_validOffset_add {s : By
     s.ValidOffset off ↔ off ≤ s.utf8Size ∧ s.str.ValidOffset (s.startInclusive.offset + off) :=
   ⟨fun h => ⟨h.1, h.2⟩, fun ⟨h₁, h₂⟩ => ⟨h₁, h₂⟩⟩
 
+@[ext]
 structure ByteString.Slice.Pos (s : ByteString.Slice) where
   offset : ByteOffset
   validOffset : s.ValidOffset offset
@@ -688,9 +689,15 @@ def ByteString.Slice.utf8ByteAt (s : ByteString.Slice) (off : ByteString.ByteOff
     simp [ByteString.ByteOffset.lt_iff_numBytes_lt, ByteString.ByteOffset.le_iff_numBytes_le] at *
     omega)
 
+theorem ByteString.Slice.isUtf8FirstBytte_utf8ByteAt_zero {s : ByteString.Slice} (h : 0 < s.utf8Size) :
+    (s.utf8ByteAt 0 h).IsUtf8FirstByte := sorry
+
 def ByteString.Slice.startPos (s : ByteString.Slice) : s.Pos where
   offset := 0
   validOffset := sorry
+
+@[simp]
+theorem ByteString.Slice.offset_startPos {s : ByteString.Slice} : s.startPos.offset = 0 := rfl
 
 instance {s : ByteString.Slice} : Inhabited s.Pos where
   default := s.startPos
@@ -698,6 +705,9 @@ instance {s : ByteString.Slice} : Inhabited s.Pos where
 def ByteString.Slice.endPos (s : ByteString.Slice) : s.Pos where
   offset := s.utf8Size
   validOffset := sorry
+
+@[simp]
+theorem ByteString.Slice.offset_endPos {s : ByteString.Slice} : s.endPos.offset = s.utf8Size := rfl
 
 theorem ByteString.Slice.validOffset_iff_isUtf8FirstByte (s : ByteString.Slice) (off : ByteString.ByteOffset) :
     s.ValidOffset off ↔ (off = s.utf8Size ∨ (∃ (h : off < s.utf8Size), UInt8.IsUtf8FirstByte (s.utf8ByteAt off h))) := by
@@ -750,9 +760,6 @@ theorem ByteString.Slice.isValidOffset_eq_true {s : ByteString.Slice} {off : Byt
     s.isValidOffset off = true ↔ s.ValidOffset off := by
   fun_cases ByteString.Slice.isValidOffset with grind [UInt8.isUtf8FirstByte_eq_true, ByteString.Slice.validOffset_iff_isUtf8FirstByte]
 
-theorem ByteString.Slice.Pos.offset_le_offset_endExclusive {s : ByteString.Slice} {pos : s.Pos} :
-    pos.offset ≤ s.endExclusive.offset := sorry
-
 def ByteString.Slice.Pos.byte {s : ByteString.Slice} (pos : s.Pos) (h : pos ≠ s.endPos) : UInt8 :=
   s.utf8ByteAt pos.offset sorry
 
@@ -763,6 +770,48 @@ def String.toByteString (s : String) : ByteString :=
 -- For testing/debugging
 def ByteString.toString (s : ByteString) : String :=
   ⟨s.data⟩
+
+def ByteString.Slice.Pos.up {s : ByteString.Slice} (pos : s.Pos) : s.str.Pos where
+  offset := ⟨s.startInclusive.offset.numBytes + pos.offset.numBytes⟩
+  validOffset := pos.validOffset.validOffset_add
+
+@[simp]
+theorem ByteString.Slice.Pos.numBytes_offset_up {s : ByteString.Slice} {pos : s.Pos} :
+    pos.up.offset.numBytes = s.startInclusive.offset.numBytes + pos.offset.numBytes := rfl
+
+@[simp]
+theorem ByteString.Slice.Pos.offset_up_le_offset_endExclusive {s : ByteString.Slice} {pos : s.Pos} :
+    pos.up.offset ≤ s.endExclusive.offset := by
+  have := pos.validOffset.le_utf8Size
+  have := s.startInclusive_le_endExclusive
+  simp only [ByteOffset.le_iff_numBytes_le, numBytes_utf8Size, Pos.numBytes_offset_up,
+    ge_iff_le] at *
+  omega
+
+theorem ByteString.Slice.Pos.offset_le_offset_up {s : ByteString.Slice} {pos : s.Pos} :
+    pos.offset ≤ pos.up.offset := by
+  simp [ByteOffset.le_iff_numBytes_le]
+
+theorem ByteString.ByteOffset.le_trans {a b c : ByteString.ByteOffset} :
+    a ≤ b → b ≤ c → a ≤ c := by
+  simpa [ByteOffset.le_iff_numBytes_le] using Nat.le_trans
+
+@[simp]
+theorem ByteString.Slice.Pos.offset_le_offset_endExclusive {s : ByteString.Slice} {pos : s.Pos} :
+    pos.offset ≤ s.endExclusive.offset :=
+  ByteOffset.le_trans offset_le_offset_up offset_up_le_offset_endExclusive
+
+def ByteString.Slice.replaceStart (s : ByteString.Slice) (pos : s.Pos) : ByteString.Slice where
+  str := s.str
+  startInclusive := pos.up
+  endExclusive := s.endExclusive
+  startInclusive_le_endExclusive := by simp
+
+def ByteString.Slice.replaceEnd (s : ByteString.Slice) (pos : s.Pos) : ByteString.Slice where
+  str := s.str
+  startInclusive := s.startInclusive
+  endExclusive := pos.up
+  startInclusive_le_endExclusive := by simp [ByteOffset.le_iff_numBytes_le]
 
 def ByteString.Slice.Pos.get {s : ByteString.Slice} (pos : s.Pos) (h : pos ≠ s.endPos) : Char :=
   utf8DecodeChar s.str.bytes (s.startInclusive.offset.numBytes + pos.offset.numBytes) sorry
@@ -782,6 +831,42 @@ def ByteString.Slice.Pos.next? {s : ByteString.Slice} (pos : s.Pos) : Option s.P
 
 def ByteString.Slice.Pos.next! {s : ByteString.Slice} (pos : s.Pos) : s.Pos :=
   if h : pos = s.endPos then panic! "Cannot advance the end position" else pos.next h
+
+def ByteString.Slice.Pos.prevAux {s : ByteString.Slice} (pos : s.Pos) (h : pos ≠ s.startPos) :
+    ByteString.ByteOffset :=
+  go ⟨pos.offset.numBytes - 1⟩ (by
+    have := pos.validOffset.le_utf8Size
+    simp only [ByteOffset.le_iff_numBytes_le, numBytes_utf8Size, ne_eq, Pos.ext_iff,
+      offset_startPos, ByteOffset.ext_iff, ByteOffset.numBytes_zero, ByteOffset.lt_iff_numBytes_lt] at ⊢ this h
+    omega)
+where
+  go (off : ByteString.ByteOffset) (h₁ : off < s.utf8Size) : ByteString.ByteOffset :=
+    if hbyte : (s.utf8ByteAt off h₁).isUtf8FirstByte then
+      off
+    else
+      have : 0 ≠ off.numBytes := by
+        intro h
+        obtain rfl : off = 0 := by simpa [ByteOffset.ext_iff] using h.symm
+        simp [UInt8.isUtf8FirstByte_eq_true.2 (s.isUtf8FirstBytte_utf8ByteAt_zero h₁)] at hbyte
+      go ⟨off.numBytes - 1⟩ (by simp [ByteOffset.lt_iff_numBytes_lt] at ⊢ h₁; omega)
+  termination_by off.numBytes
+
+theorem ByteString.Slice.Pos.validOffset_prevAuxGo {s : ByteString.Slice} (off : ByteString.ByteOffset) (h₁ : off < s.utf8Size) :
+    s.ValidOffset (ByteString.Slice.Pos.prevAux.go off h₁) := by
+  fun_induction prevAux.go with
+  | case1 off h h' =>
+    refine (s.validOffset_iff_isUtf8FirstByte off).2 (Or.inr ⟨h, ?_⟩)
+    exact UInt8.isUtf8FirstByte_eq_true.1 h'
+  | case2 => assumption
+
+theorem ByteString.Slice.Pos.validOffset_prevAux {s : ByteString.Slice} (pos : s.Pos) (h : pos ≠ s.startPos) :
+    s.ValidOffset (pos.prevAux h) := by
+  rw [prevAux]
+  apply ByteString.Slice.Pos.validOffset_prevAuxGo
+
+def ByteString.Slice.Pos.prev {s : ByteString.Slice} (pos : s.Pos) (h : pos ≠ s.startPos) : s.Pos where
+  offset := prevAux pos h
+  validOffset := validOffset_prevAux pos h
 
 @[inline]
 def ByteString.Pos.toSlice {s : ByteString} (pos : s.Pos) : s.toSlice.Pos where
