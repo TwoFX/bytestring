@@ -19,6 +19,40 @@ class ForwardPattern (ρ : Type) (σ : outParam (Slice → Type)) extends ToForw
   startsWith : Slice → ρ → Bool
   dropPrefix? : Slice → ρ → Option Slice
 
+namespace Internal
+
+variable {ρ : Type} {σ : Slice → Type}
+variable [∀ s, Std.Iterators.Iterator (σ s) Id (SearchStep s)]
+variable [∀ s, Std.Iterators.Finite (σ s) Id]
+
+@[inline]
+def nextMatch (searcher : Std.Iter (α := σ s) (SearchStep s)) :
+    Option (Std.Iter (α := σ s) (SearchStep s) × s.Pos × s.Pos) :=
+  go searcher
+where
+  go [∀ s, Std.Iterators.Finite (σ s) Id] (searcher : Std.Iter (α := σ s) (SearchStep s)) :
+      Option (Std.Iter (α := σ s) (SearchStep s) × s.Pos × s.Pos) :=
+    match searcher.step with
+    | .yield it (.matched startPos endPos) _ => some (it, startPos, endPos)
+    | .yield it (.rejected ..) _ | .skip it .. => go it
+    | .done .. => none
+  termination_by Std.Iterators.Iter.finitelyManySteps searcher
+
+@[inline]
+def nextReject (searcher : Std.Iter (α := σ s) (SearchStep s)) :
+    Option (Std.Iter (α := σ s) (SearchStep s) × s.Pos × s.Pos) :=
+  go searcher
+where
+  go [∀ s, Std.Iterators.Finite (σ s) Id] (searcher : Std.Iter (α := σ s) (SearchStep s)) :
+      Option (Std.Iter (α := σ s) (SearchStep s) × s.Pos × s.Pos) :=
+    match searcher.step with
+    | .yield it (.rejected startPos endPos) _ => some (it, startPos, endPos)
+    | .yield it (.matched ..) _ | .skip it .. => go it
+    | .done .. => none
+  termination_by Std.Iterators.Iter.finitelyManySteps searcher
+
+end Internal
+
 namespace ForwardPattern
 
 variable {ρ : Type} {σ : Slice → Type}
@@ -272,16 +306,32 @@ def startsWith (s : Slice) (pat : ρ) : Bool :=
 structure SplitIterator (ρ : Type) [ForwardPattern ρ σ] where
   s : Slice
   currPos : s.Pos
-  searcher : σ s
+  searcher : Std.Iter (α := σ s) (SearchStep s)
   --deriving Inhabited
 
 namespace SplitIterator
 
-instance : Std.Iterators.Iterator (SplitIterator ρ) m Slice where
+instance [Pure m] : Std.Iterators.Iterator (SplitIterator ρ) m Slice where
   IsPlausibleStep := sorry
-  step := sorry
+  step := fun ⟨s, currPos, searcher⟩ =>
+    match Internal.nextMatch searcher with
+    | some (searcher, startPos, endPos) =>
+      -- TODO: This is difficult, we want to put `endPos` here but our abstract notion of pattern
+      -- might return something that is in fact not `currPos ≤` and as such invalid to be used here.
+      -- we might require some lawfulness annotations on the pattern (or more precisely its searcher
+      -- iterator) to make this work out. I'll wait on this for a talk with Markus.
+      let slice := s.replaceStart currPos |>.replaceEnd sorry
+      let nextIt := ⟨s, endPos, searcher⟩
+      pure ⟨.yield nextIt slice, sorry⟩
+    | none => pure ⟨.done, sorry⟩
 
-instance [Pure m] : Std.Iterators.Finite (SplitIterator ρ) m := sorry
+private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (SplitIterator ρ) m where
+  rel := sorry
+  wf := sorry
+  subrelation := sorry
+
+instance [Pure m] : Std.Iterators.Finite (SplitIterator ρ) m :=
+  .of_finitenessRelation finitenessRelation
 
 instance [Monad m] [Monad n] : Std.Iterators.IteratorCollect (SplitIterator ρ) m n :=
   .defaultImplementation
@@ -298,18 +348,18 @@ instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial (SplitIterator 
 end SplitIterator
 
 @[specialize pat]
-def split (s : Slice) (pat : ρ) : Std.Iter (α := SplitIterator ρ) Slice := sorry
+def split (s : Slice) (pat : ρ) : Std.Iter (α := SplitIterator ρ) Slice :=
+  { internalState := { s, currPos := s.startPos, searcher := ToForwardSearcher.toSearcher s pat } }
 
 @[specialize pat]
-def trimStartMatches (s : Slice) (pat : ρ) : Slice := Id.run do
+def trimStartMatches (s : Slice) (pat : ρ) : Slice :=
   let searcher := ToForwardSearcher.toSearcher s pat
-  for step in searcher do
-    if let .rejected start .. := step then
-      return s.replaceStart start
-  return s.replaceStart s.endPos
+  match Internal.nextReject searcher with
+  | some (_, startPos, _) => s.replaceStart startPos
+  | none => s.replaceStart s.endPos
 
 @[inline]
-def trimAsciiStart (s : Slice) : Slice := Id.run do
+def trimAsciiStart (s : Slice) : Slice :=
   trimStartMatches s Char.isWhitespace
 
 @[inline]
@@ -321,28 +371,25 @@ def trimPrefix (s : Slice) (pat : ρ) : Slice :=
   dropPrefix? s pat |>.getD s
 
 @[specialize pat]
-def find (s : Slice) (pat : ρ) : Option s.Pos := Id.run do
+def find (s : Slice) (pat : ρ) : Option s.Pos :=
   let searcher := ToForwardSearcher.toSearcher s pat
-  for step in searcher do
-    if let .matched start .. := step then
-      return some start
-  return none
+  match Internal.nextMatch searcher with
+  | some (_, startPos, _) => some startPos
+  | none => none
 
 @[specialize pat]
-def contains (s : Slice) (pat : ρ) : Bool := Id.run do
+def contains (s : Slice) (pat : ρ) : Bool :=
   let searcher := ToForwardSearcher.toSearcher s pat
-  for step in searcher do
-    if let .matched .. := step then
-      return true
-  return false
+  Internal.nextMatch searcher |>.isSome
 
 @[specialize pat]
-def any (s : Slice) (pat : ρ) : Bool := Id.run do
+def any (s : Slice) (pat : ρ) : Bool :=
   let searcher := ToForwardSearcher.toSearcher s pat
-  for step in searcher do
-    if let .rejected .. := step then
-      return false
-  return true
+  Internal.nextReject searcher |>.isNone
+
+set_option trace.compiler.ir.result true in
+private def test (s : Slice) :=
+  s.find (fun (c : Char) => c.isWhitespace)
 
 end ForwardPatternUsers
 
@@ -563,6 +610,7 @@ variable [∀ s, Std.Iterators.IteratorLoop (σ s) Id Id]
 def endsWith [SuffixPattern ρ] (s : Slice) (pat : ρ) : Bool :=
   SuffixPattern.endsWith s pat
 
+-- TODO: Wait for forward splitting with this one
 structure RevSplitIterator where
   s : Slice
   currPos : s.Pos
@@ -576,12 +624,11 @@ instance : Std.Iterators.Iterator RevSplitIterator Id Slice where
 def revSplit [ToBackwardSearcher ρ σ] (s : Slice) (pat : ρ) : RevSplitIterator := sorry
 
 @[specialize pat]
-def trimEndMatches [ToBackwardSearcher ρ σ] (s : Slice) (pat : ρ) : Slice := Id.run do
+def trimEndMatches [ToBackwardSearcher ρ σ] (s : Slice) (pat : ρ) : Slice :=
   let searcher := ToBackwardSearcher.toSearcher s pat
-  for step in searcher do
-    if let .rejected _ endPos := step then
-      return s.replaceEnd endPos
-  return s.replaceEnd s.startPos
+  match Internal.nextReject searcher with
+  | some (_, _, endPos) => s.replaceEnd endPos
+  | none => s.replaceEnd s.startPos
 
 @[inline]
 def trimAsciiEnd (s : Slice) : Slice :=
@@ -596,16 +643,11 @@ def trimSuffix [SuffixPattern ρ] (s : Slice) (pat : ρ) : Slice :=
   dropSuffix? s pat |>.getD s
 
 @[specialize pat]
-def revFind [ToBackwardSearcher ρ σ] (s : Slice) (pat : ρ) : Option s.Pos := Id.run do
+def revFind [ToBackwardSearcher ρ σ] (s : Slice) (pat : ρ) : Option s.Pos :=
   let searcher := ToBackwardSearcher.toSearcher s pat
-  for step in searcher do
-    if let .matched start .. := step then
-      return some start
-  return none
-
-private def test (s : Slice) :=
-  s.revFind 'a'
-
+  match Internal.nextMatch searcher with
+  | some (_, startPos, _) => some startPos
+  | none => none
 
 end SuffixPatternUsers
 
@@ -718,6 +760,7 @@ instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial (CharIndexItera
 
 end CharIndexIterator
 
+-- TODO: wait with this one until split is resolved, will run into the same issue
 structure LineIterator where
   s : Slice
   currPos : s.Pos
@@ -752,6 +795,7 @@ instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial LineIterator m 
 
 end LineIterator
 
+-- TODO: wait with this one until markus has decided whether ByteOffset is a good idea
 structure ByteIterator where
   s : Slice
   offset : ByteOffset
