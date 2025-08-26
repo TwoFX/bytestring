@@ -21,6 +21,26 @@ class ForwardPattern (ρ : Type) (σ : outParam (Slice → Type)) extends ToForw
 
 namespace Internal
 
+/-
+TODO: This can be @[extern]-ed to a proper call to `memcmp`, in particular the additional `h1`,
+`h2` assumptions allow us to unbox all involved `Nat` and run `memcmp` without any care in the world
+-/
+def memcmp (lhs rhs : Slice) (lstart : ByteOffset) (rstart : ByteOffset) (len : ByteOffset)
+    (h1 : lstart + len ≤ lhs.utf8Size) (h2 : rstart + len ≤ rhs.utf8Size) : Bool :=
+  go 0
+where
+  go (curr : ByteOffset) : Bool :=
+    if h : curr < len then
+      -- SAFETY: These are fine by a combination of h1, h2 and h
+      if lhs.utf8ByteAt (lstart + curr) sorry == rhs.utf8ByteAt (rstart + curr) sorry then
+        go curr.inc
+      else
+        false
+    else
+      true
+  termination_by len - curr
+  decreasing_by sorry
+
 variable {ρ : Type} {σ : Slice → Type}
 variable [∀ s, Std.Iterators.Iterator (σ s) Id (SearchStep s)]
 variable [∀ s, Std.Iterators.Finite (σ s) Id]
@@ -245,41 +265,23 @@ instance : ToForwardSearcher Slice ForwardSliceSearcher where
 
 @[inline]
 def startsWith (s : Slice) (pat : Slice) : Bool :=
-  go s s.startPos.offset pat pat.startPos.offset
-where
-  go (s : Slice) (sCurr : ByteOffset) (pat : Slice) (patCurr : ByteOffset) : Bool :=
-    if h : sCurr < s.utf8Size ∧ patCurr < pat.utf8Size then
-      if s.utf8ByteAt sCurr h.left == pat.utf8ByteAt patCurr h.right then
-        go s sCurr.inc pat patCurr.inc
-      else
-        false
-    else
-      sCurr == s.utf8Size && patCurr == pat.utf8Size
-  termination_by s.utf8Size - sCurr
-  decreasing_by sorry
+  if h : pat.utf8Size ≤ s.utf8Size then
+    -- SAFETY: these are true by simple arithmetic with h
+    Internal.memcmp s pat s.startPos.offset pat.startPos.offset pat.utf8Size sorry sorry
+  else
+    false
 
 @[inline]
 def dropPrefix? (s : Slice) (pat : Slice) : Option Slice :=
-  go s s.startPos.offset pat pat.startPos.offset
-where
-  go (s : Slice) (sCurr : ByteOffset) (pat : Slice) (patCurr : ByteOffset) : Option Slice :=
-    if h1 : patCurr < pat.utf8Size then
-      if h2 : sCurr < s.utf8Size then
-        if s.utf8ByteAt sCurr h2 == pat.utf8ByteAt patCurr h1 then
-          go s sCurr.inc pat patCurr.inc
-        else
-          none
-      else
-        none
-    else
-      /-
-      SAFETY: This pos! works because `s` has the prefix `pat` starting from the initial value of
-      `sCurr` so `sCurr` is at the end of the `pat` prefix in `s` and thus at a valid unicode offset
-      right now
-      -/
-      some <| s.replaceStart (s.pos! sCurr)
-  termination_by s.endPos.offset - sCurr
-  decreasing_by sorry
+  if startsWith s pat then
+    /-
+    SAFETY: This pos! works because `s` has the prefix `pat` starting from the initial value of
+    `sCurr` so `sCurr` is at the end of the `pat` prefix in `s` and thus at a valid unicode offset
+    right now
+    -/
+    some <| s.replaceStart <| s.pos! <| s.startPos.offset + pat.utf8Size
+  else
+    none
 
 instance : ForwardPattern Slice ForwardSliceSearcher where
   startsWith := startsWith
@@ -556,44 +558,21 @@ namespace SuffixPattern.Slice
 
 @[inline]
 def endsWith (s : Slice) (pat : Slice) : Bool :=
-  go s s.endPos.offset pat pat.endPos.offset
-where
-  go (s : Slice) (sCurr : ByteOffset) (pat : Slice) (patCurr : ByteOffset) : Bool :=
-    if h : sCurr ≠ 0 ∧ patCurr ≠ 0 then
-      let sPrev := sCurr.dec
-      let patPrev := patCurr.dec
-      -- These sorries are simple Nat arguments if we pull through additional invariants
-      if s.utf8ByteAt sPrev sorry == pat.utf8ByteAt patPrev sorry then
-        go s sPrev pat patPrev
-      else
-        false
-    else
-      sCurr == 0 && patCurr == 0
-  termination_by sCurr
-  decreasing_by sorry
+  if h : pat.utf8Size ≤ s.utf8Size then
+    -- SAFETY: these are true by simple arithmetic with h
+    let sStart := s.endPos.offset - pat.utf8Size
+    let patStart := pat.startPos.offset
+    Internal.memcmp s pat sStart patStart pat.utf8Size sorry sorry
+  else
+    false
 
 @[inline]
 def dropSuffix? (s : Slice) (pat : Slice) : Option Slice :=
-  go s s.endPos.offset pat pat.endPos.offset
-where
-  go (s : Slice) (sCurr : ByteOffset) (pat : Slice) (patCurr : ByteOffset) : Option Slice :=
-    if h1 : patCurr ≠ 0 then
-      if h2 : sCurr ≠ 0 then
-        let sPrev := sCurr.dec
-        let patPrev := patCurr.dec
-        if s.utf8ByteAt sPrev sorry == pat.utf8ByteAt patPrev sorry then
-          go s sPrev pat patPrev
-        else
-          none
-      else
-        none
-    else
-      /-
-      SAFETY: Same reason as `dropPrefix`.
-      -/
-      some <| s.replaceStart (Slice.pos! s sCurr)
-  termination_by sCurr
-  decreasing_by sorry
+  if endsWith s pat then
+    -- SAFETY: Same as dropPrefix?
+    some <| s.replaceEnd <| s.pos! <| s.endPos.offset - pat.utf8Size
+  else
+    none
 
 instance : SuffixPattern Slice where
   endsWith := endsWith

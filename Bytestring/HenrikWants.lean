@@ -12,11 +12,10 @@ namespace ByteString
 
 namespace ByteOffset
 
-@[inline]
-def inc (offset : ByteOffset) : ByteOffset := ⟨offset.numBytes + 1⟩
+instance : DecidableLE ByteOffset := sorry
 
 @[inline]
-def dec (offset : ByteOffset) : ByteOffset := ⟨offset.numBytes - 1⟩
+def inc (offset : ByteOffset) : ByteOffset := ⟨offset.numBytes + 1⟩
 
 end ByteOffset
 
