@@ -245,35 +245,40 @@ instance : ToForwardSearcher Slice ForwardSliceSearcher where
 
 @[inline]
 def startsWith (s : Slice) (pat : Slice) : Bool :=
-  go s s.startPos pat pat.startPos
+  go s s.startPos.offset pat pat.startPos.offset
 where
-  go (s : Slice) (sCurr : s.Pos) (pat : Slice) (patCurr : pat.Pos) : Bool :=
-    if h : sCurr ≠ s.endPos ∧ patCurr ≠ pat.endPos then
-      if (sCurr.get h.left) == (patCurr.get h.right) then
-        go s (sCurr.next h.left) pat (patCurr.next h.right)
+  go (s : Slice) (sCurr : ByteOffset) (pat : Slice) (patCurr : ByteOffset) : Bool :=
+    if h : sCurr < s.utf8Size ∧ patCurr < pat.utf8Size then
+      if s.utf8ByteAt sCurr h.left == pat.utf8ByteAt patCurr h.right then
+        go s sCurr.inc pat patCurr.inc
       else
         false
     else
-      sCurr == s.endPos && patCurr == pat.endPos
-  termination_by s.endPos.offset - sCurr.offset
+      sCurr == s.utf8Size && patCurr == pat.utf8Size
+  termination_by s.utf8Size - sCurr
   decreasing_by sorry
 
 @[inline]
 def dropPrefix? (s : Slice) (pat : Slice) : Option Slice :=
-  go s s.startPos pat pat.startPos
+  go s s.startPos.offset pat pat.startPos.offset
 where
-  go (s : Slice) (sCurr : s.Pos) (pat : Slice) (patCurr : pat.Pos) : Option Slice :=
-    if h1 : patCurr ≠ pat.endPos then
-      if h2 : sCurr ≠ s.endPos then
-        if (sCurr.get h2) == (patCurr.get h1) then
-          go s (sCurr.next h2) pat (patCurr.next h1)
+  go (s : Slice) (sCurr : ByteOffset) (pat : Slice) (patCurr : ByteOffset) : Option Slice :=
+    if h1 : patCurr < pat.utf8Size then
+      if h2 : sCurr < s.utf8Size then
+        if s.utf8ByteAt sCurr h2 == pat.utf8ByteAt patCurr h1 then
+          go s sCurr.inc pat patCurr.inc
         else
           none
       else
         none
     else
-      some <| s.replaceStart sCurr
-  termination_by s.endPos.offset - sCurr.offset
+      /-
+      SAFETY: This pos! works because `s` has the prefix `pat` starting from the initial value of
+      `sCurr` so `sCurr` is at the end of the `pat` prefix in `s` and thus at a valid unicode offset
+      right now
+      -/
+      some <| s.replaceStart (s.pos! sCurr)
+  termination_by s.endPos.offset - sCurr
   decreasing_by sorry
 
 instance : ForwardPattern Slice ForwardSliceSearcher where
@@ -358,6 +363,7 @@ def trimStartMatches (s : Slice) (pat : ρ) : Slice :=
   | some (_, startPos, _) => s.replaceStart startPos
   | none => s.replaceStart s.endPos
 
+-- If we want to optimize this can be pushed further by specialising for ASCII
 @[inline]
 def trimAsciiStart (s : Slice) : Slice :=
   trimStartMatches s Char.isWhitespace
@@ -550,39 +556,43 @@ namespace SuffixPattern.Slice
 
 @[inline]
 def endsWith (s : Slice) (pat : Slice) : Bool :=
-  go s s.endPos pat pat.endPos
+  go s s.endPos.offset pat pat.endPos.offset
 where
-  go (s : Slice) (sCurr : s.Pos) (pat : Slice) (patCurr : pat.Pos) : Bool :=
-    if h : sCurr ≠ s.startPos ∧ patCurr ≠ pat.startPos then
-      let sPrev := sCurr.prev h.left
-      let patPrev := patCurr.prev h.right
-      if sPrev.get (prev_ne_endPos h.left) == patPrev.get (prev_ne_endPos h.right) then
+  go (s : Slice) (sCurr : ByteOffset) (pat : Slice) (patCurr : ByteOffset) : Bool :=
+    if h : sCurr ≠ 0 ∧ patCurr ≠ 0 then
+      let sPrev := sCurr.dec
+      let patPrev := patCurr.dec
+      -- These sorries are simple Nat arguments if we pull through additional invariants
+      if s.utf8ByteAt sPrev sorry == pat.utf8ByteAt patPrev sorry then
         go s sPrev pat patPrev
       else
         false
     else
-      sCurr == s.startPos ∧ patCurr == pat.startPos
-  termination_by sCurr.offset - s.startPos.offset
+      sCurr == 0 && patCurr == 0
+  termination_by sCurr
   decreasing_by sorry
 
 @[inline]
 def dropSuffix? (s : Slice) (pat : Slice) : Option Slice :=
-  go s s.endPos pat pat.endPos
+  go s s.endPos.offset pat pat.endPos.offset
 where
-  go (s : Slice) (sCurr : s.Pos) (pat : Slice) (patCurr : pat.Pos) : Option Slice :=
-    if h1 : patCurr ≠ pat.startPos then
-      if h2 : sCurr ≠ s.startPos then
-        let sPrev := sCurr.prev h2
-        let patPrev := patCurr.prev h1
-        if sPrev.get (prev_ne_endPos h2) == patPrev.get (prev_ne_endPos h1) then
+  go (s : Slice) (sCurr : ByteOffset) (pat : Slice) (patCurr : ByteOffset) : Option Slice :=
+    if h1 : patCurr ≠ 0 then
+      if h2 : sCurr ≠ 0 then
+        let sPrev := sCurr.dec
+        let patPrev := patCurr.dec
+        if s.utf8ByteAt sPrev sorry == pat.utf8ByteAt patPrev sorry then
           go s sPrev pat patPrev
         else
           none
       else
         none
     else
-      some <| s.replaceStart sCurr
-  termination_by sCurr.offset - s.startPos.offset
+      /-
+      SAFETY: Same reason as `dropPrefix`.
+      -/
+      some <| s.replaceStart (Slice.pos! s sCurr)
+  termination_by sCurr
   decreasing_by sorry
 
 instance : SuffixPattern Slice where
@@ -626,6 +636,7 @@ def trimEndMatches [ToBackwardSearcher ρ σ] (s : Slice) (pat : ρ) : Slice :=
   | some (_, _, endPos) => s.replaceEnd endPos
   | none => s.replaceEnd s.startPos
 
+-- If we want to optimize this can be pushed further by specialising for ASCII
 @[inline]
 def trimAsciiEnd (s : Slice) : Slice :=
   trimEndMatches s Char.isWhitespace
@@ -651,17 +662,17 @@ def trimAscii (s : Slice) : Slice :=
   s.trimAsciiStart.trimAsciiEnd
 
 def eqIgnoreAsciiCase (s1 s2 : Slice) : Bool :=
-    s1.utf8Size == s2.utf8Size && go s1 s1.startPos s2 s2.startPos
+    s1.utf8Size == s2.utf8Size && go s1 s1.startPos.offset s2 s2.startPos.offset
 where
-  go (s1 : Slice) (s1Curr : s1.Pos) (s2 : Slice) (s2Curr : s2.Pos) : Bool :=
-    if h : s1Curr ≠ s1.endPos ∧ s2Curr ≠ s2.endPos then
-      if (s1Curr.get h.left).toLower == (s2Curr.get h.right).toLower then
-        go s1 (s1Curr.next h.left) s2 (s2Curr.next h.right)
+  go (s1 : Slice) (s1Curr : ByteOffset) (s2 : Slice) (s2Curr : ByteOffset) : Bool :=
+    if h : s1Curr < s1.utf8Size ∧ s2Curr < s2.utf8Size then
+      if (s1.utf8ByteAt s1Curr h.left).toAsciiLower == (s2.utf8ByteAt s2Curr h.right).toAsciiLower then
+        go s1 s1Curr.inc s2 s2Curr.inc
       else
         false
     else
-      s1Curr == s1.endPos && s2Curr == s2.endPos
-  termination_by s1.endPos.offset - s1Curr.offset
+      s1Curr == s1.utf8Size && s2Curr == s2.utf8Size
+  termination_by s1.endPos.offset - s1Curr
   decreasing_by sorry
 
 instance : DecidableEq Slice := sorry
@@ -825,6 +836,31 @@ instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial ByteIterator m 
   .defaultImplementation
 
 end ByteIterator
+
+section Ranges
+
+instance {s : Slice} : Std.PRange.UpwardEnumerable s.Pos where
+  succ? p := p.next?
+
+instance {s : Slice} : Std.PRange.Least? s.Pos where
+  least? := some s.startPos
+
+/-
+- LawfulUpwardEnumerable is not doable without LT instance
+- InfinitelyUpwardEnumerable is false
+- RangeSize is doable but not in O(1) so we skip it as its a footgun
+- LawfulRangeSize not applicable because of that
+-/
+
+/-
+We want this to work at least:
+#check fun (s : Slice) => Id.run do
+  for x in s.startPos...s.endPos do
+    continue
+  return 0
+-/
+
+end Ranges
 
 end Slice
 end ByteString
