@@ -383,13 +383,9 @@ def contains (s : Slice) (pat : ρ) : Bool :=
   Internal.nextMatch searcher |>.isSome
 
 @[specialize pat]
-def any (s : Slice) (pat : ρ) : Bool :=
+def all (s : Slice) (pat : ρ) : Bool :=
   let searcher := ToForwardSearcher.toSearcher s pat
   Internal.nextReject searcher |>.isNone
-
-set_option trace.compiler.ir.result true in
-private def test (s : Slice) :=
-  s.find (fun (c : Char) => c.isWhitespace)
 
 end ForwardPatternUsers
 
