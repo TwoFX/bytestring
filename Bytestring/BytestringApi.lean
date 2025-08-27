@@ -38,8 +38,8 @@ def trimPrefix (s : ByteString) (pat : ρ) : Slice :=
   s.toSlice.trimPrefix pat
 
 @[inline]
-def find (s : ByteString) (pat : ρ) : Option s.Pos :=
-  s.toSlice.find pat |>.map Slice.Pos.up
+def find? (s : ByteString) (pat : ρ) : Option s.Pos :=
+  s.toSlice.find? pat |>.map Slice.Pos.up
 
 @[inline]
 def contains (s : ByteString) (pat : ρ) : Bool :=
@@ -63,7 +63,8 @@ def endsWith [Slice.SuffixPattern ρ] (s : ByteString) (pat : ρ) : Bool :=
   s.toSlice.endsWith pat
 
 @[inline]
-def revSplit [Slice.ToBackwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Slice.RevSplitIterator :=
+def revSplit [Slice.ToBackwardSearcher ρ σ] (s : ByteString) (pat : ρ) :
+    Std.Iter (α := Slice.RevSplitIterator ρ) Slice :=
   s.toSlice.revSplit pat
 
 @[inline]
@@ -83,8 +84,8 @@ def trimSuffix [Slice.SuffixPattern ρ] (s : ByteString) (pat : ρ) : Slice :=
   s.toSlice.trimSuffix pat
 
 @[inline]
-def revFind [Slice.ToBackwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Option s.Pos :=
-  s.toSlice.revFind pat |>.map Slice.Pos.up
+def revFind? [Slice.ToBackwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Option s.Pos :=
+  s.toSlice.revFind? pat |>.map Slice.Pos.up
 
 end SuffixPatternUsers
 
