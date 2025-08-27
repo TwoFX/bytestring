@@ -742,8 +742,10 @@ structure CharIterator where
   currPos : s.Pos
   --deriving Inhabited
 
+def chars (s : Slice) : Std.Iter (α := CharIterator) Char :=
+  { internalState := { s, currPos := s.startPos }}
+
 namespace CharIterator
--- TODO: API to create iterator
 
 instance [Pure m] : Std.Iterators.Iterator CharIterator m Char where
   IsPlausibleStep it
@@ -782,14 +784,16 @@ instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial CharIterator m 
 
 end CharIterator
 
-structure CharIndexIterator (s : Slice) where
+structure PosIterator (s : Slice) where
   currPos : s.Pos
   deriving Inhabited
 
-namespace CharIndexIterator
--- TODO: API to create iterator
+def positions (s : Slice) : Std.Iter (α := PosIterator s) s.Pos :=
+  { internalState := { currPos := s.startPos }}
 
-instance [Pure m] : Std.Iterators.Iterator (CharIndexIterator s) m s.Pos where
+namespace PosIterator
+
+instance [Pure m] : Std.Iterators.Iterator (PosIterator s) m s.Pos where
   IsPlausibleStep it
     | .yield it' out =>
       ∃ h : it.internalState.currPos ≠ s.endPos,
@@ -803,27 +807,27 @@ instance [Pure m] : Std.Iterators.Iterator (CharIndexIterator s) m s.Pos where
     else
       pure ⟨.yield ⟨⟨currPos.next h⟩⟩ currPos, by simp [h]⟩
 
-private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (CharIndexIterator s) m where
+private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (PosIterator s) m where
   rel := sorry
   wf := sorry
   subrelation := sorry
 
-instance [Pure m] : Std.Iterators.Finite (CharIndexIterator s) m :=
+instance [Pure m] : Std.Iterators.Finite (PosIterator s) m :=
   .of_finitenessRelation finitenessRelation
 
-instance [Monad m] [Monad n] : Std.Iterators.IteratorCollect (CharIndexIterator s) m n :=
+instance [Monad m] [Monad n] : Std.Iterators.IteratorCollect (PosIterator s) m n :=
   .defaultImplementation
 
-instance [Monad m] [Monad n] : Std.Iterators.IteratorCollectPartial (CharIndexIterator s) m n :=
+instance [Monad m] [Monad n] : Std.Iterators.IteratorCollectPartial (PosIterator s) m n :=
   .defaultImplementation
 
-instance [Monad m] [Monad n] : Std.Iterators.IteratorLoop (CharIndexIterator s) m n :=
+instance [Monad m] [Monad n] : Std.Iterators.IteratorLoop (PosIterator s) m n :=
   .defaultImplementation
 
-instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial (CharIndexIterator s) m n :=
+instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial (PosIterator s) m n :=
   .defaultImplementation
 
-end CharIndexIterator
+end PosIterator
 
 -- TODO: wait with this one until split is resolved, will run into the same issue
 structure LineIterator where

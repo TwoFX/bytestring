@@ -101,6 +101,55 @@ instance : DecidableEq ByteString := sorry
 instance : Ord ByteString := sorry
 instance : Hashable ByteString := sorry
 
+def chars (s : ByteString) : Std.Iter (α := Slice.CharIterator) Char :=
+  s.toSlice.chars
+
+structure PosIterator (s : ByteString) where
+  currPos : s.Pos
+  --deriving Inhabited
+
+-- we want to duplicate this to return `String.Pos` instead of `Slice.Pos`
+def positions (s : ByteString) : Std.Iter (α := PosIterator s) s.Pos :=
+  { internalState := { currPos := s.startPos }}
+
+namespace PosIterator
+
+instance [Pure m] : Std.Iterators.Iterator (PosIterator s) m s.Pos where
+  IsPlausibleStep it
+    | .yield it' out =>
+      ∃ h : it.internalState.currPos ≠ s.endPos,
+        it'.internalState.currPos = it.internalState.currPos.next h ∧
+        it.internalState.currPos = out
+    | .skip _ => False
+    | .done => it.internalState.currPos = s.endPos
+  step := fun ⟨⟨currPos⟩⟩ =>
+    if h : currPos = s.endPos then
+      pure ⟨.done, by simp [h]⟩
+    else
+      pure ⟨.yield ⟨⟨currPos.next h⟩⟩ currPos, by simp [h]⟩
+
+private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (PosIterator s) m where
+  rel := sorry
+  wf := sorry
+  subrelation := sorry
+
+instance [Pure m] : Std.Iterators.Finite (PosIterator s) m :=
+  .of_finitenessRelation finitenessRelation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorCollect (PosIterator s) m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorCollectPartial (PosIterator s) m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorLoop (PosIterator s) m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial (PosIterator s) m n :=
+  .defaultImplementation
+
+end PosIterator
+
 -- TODO: iterator API
 
 end ByteString

@@ -22,6 +22,8 @@ def inc (offset : ByteOffset) : ByteOffset := ⟨offset.numBytes + 1⟩
 
 end ByteOffset
 
+deriving instance DecidableEq for ByteString.Pos
+
 namespace Slice
 
 theorem prev_ne_endPos {s : Slice} {p : s.Pos} (h : p ≠ s.startPos) : p.prev h ≠ s.endPos := sorry
