@@ -12,7 +12,10 @@ namespace ByteString
 
 namespace ByteOffset
 
-instance : DecidableLE ByteOffset := sorry
+instance : Inhabited ByteOffset := ⟨0⟩
+
+instance : DecidableLE ByteString.ByteOffset :=
+  inferInstanceAs (∀ a b : ByteString.ByteOffset, Decidable (a.numBytes ≤ b.numBytes))
 
 @[inline]
 def inc (offset : ByteOffset) : ByteOffset := ⟨offset.numBytes + 1⟩

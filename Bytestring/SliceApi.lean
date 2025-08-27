@@ -220,34 +220,61 @@ instance : ForwardPattern (Char → Bool) ForwardCharPredSearcher := .defaultImp
 end ForwardCharPredSearcher
 
 @[unbox]
-structure ForwardSliceSearcher (s : Slice) where
-  -- TODO: likely needs to be nonempty
-  needle : Slice
-  -- TODO: This needs to be a vector
-  table : Array Nat
-  stackPos : s.Pos
-  needlePos : needle.Pos
+inductive ForwardSliceSearcher (s : Slice) where
+  | empty (pos : s.Pos) (finished : Bool)
+  | proper (needle : Slice) (table : Array ByteOffset) (stackPos : ByteOffset) (needlePos : ByteOffset)
   --deriving Inhabited
 
 namespace ForwardSliceSearcher
 
-def buildTable (pat : Slice) : Array Nat :=
-  sorry
+def buildTable (pat : Slice) : Array ByteOffset :=
+  if pat.isEmpty then
+    #[]
+  else
+    let arr := Array.emptyWithCapacity pat.utf8Size.numBytes
+    let arr := arr.push 0
+    go (ByteOffset.inc 0) arr
+where
+  go (pos : ByteOffset) (table : Array ByteOffset) :=
+    if h : pos < pat.utf8Size then
+      let patByte := pat.utf8ByteAt pos h
+      let distance := computeDistance table[pos.numBytes - 1]! patByte table
+      let distance := if patByte = pat.utf8ByteAt distance sorry then distance.inc else distance
+      go pos.inc (table.push distance)
+    else
+      table
+  termination_by pat.utf8Size - pos
+  decreasing_by sorry
+
+  computeDistance (distance : ByteOffset) (patByte : UInt8) (table : Array ByteOffset) : ByteOffset :=
+    if distance > 0 && patByte = pat.utf8ByteAt distance sorry then
+      computeDistance table[distance.numBytes - 1]! patByte table
+    else
+      distance
+  termination_by distance
+  decreasing_by sorry
 
 @[inline]
 def iter (s : Slice) (pat : Slice) : Std.Iter (α := ForwardSliceSearcher s) (SearchStep s) :=
-  { internalState := {
-      needle := pat,
-      table := buildTable pat,
-      stackPos := s.startPos,
-      needlePos := pat.startPos
-    }
-  }
+  if pat.isEmpty then
+    { internalState := .empty s.startPos false }
+  else
+    { internalState := .proper pat (buildTable pat) s.startPos.offset pat.startPos.offset }
 
 instance (s : Slice) : Std.Iterators.Iterator (ForwardSliceSearcher s) Id (SearchStep s) where
   IsPlausibleStep := sorry
-  step := fun ⟨needle, table, stackPos, needlePos⟩ => do
-    sorry
+  step := fun ⟨iter⟩ =>
+    match iter with
+    | .empty pos finished =>
+      if finished then
+        pure ⟨.done, sorry⟩
+      else
+        let res := .matched pos pos
+        if h : pos ≠ s.endPos then
+          pure ⟨.yield ⟨.empty (pos.next h) false⟩ res, sorry⟩
+        else
+          pure ⟨.yield ⟨.empty pos true⟩ res, sorry⟩
+    | .proper pat table stackPos needlePos => sorry
 
 private def finitenessRelation : Std.Iterators.FinitenessRelation (ForwardSliceSearcher s) Id where
   rel := sorry
@@ -310,27 +337,34 @@ variable [ForwardPattern ρ σ]
 def startsWith (s : Slice) (pat : ρ) : Bool :=
   ForwardPattern.startsWith s pat
 
-structure SplitIterator (ρ : Type) [ForwardPattern ρ σ] where
-  s : Slice
-  currPos : s.Pos
-  searcher : Std.Iter (α := σ s) (SearchStep s)
-  --deriving Inhabited
+inductive SplitIterator (ρ : Type) [ForwardPattern ρ σ] where
+  | operating (s : Slice) (currPos : s.Pos) (searcher : Std.Iter (α := σ s) (SearchStep s))
+  | atEnd
 
 namespace SplitIterator
 
 instance [Pure m] : Std.Iterators.Iterator (SplitIterator ρ) m Slice where
   IsPlausibleStep := sorry
-  step := fun ⟨s, currPos, searcher⟩ =>
-    match Internal.nextMatch searcher with
-    | some (searcher, startPos, endPos) =>
-      -- TODO: This is difficult, we want to put `endPos` here but our abstract notion of pattern
-      -- might return something that is in fact not `currPos ≤` and as such invalid to be used here.
-      -- we might require some lawfulness annotations on the pattern (or more precisely its searcher
-      -- iterator) to make this work out. I'll wait on this for a talk with Markus.
-      let slice := s.replaceStart currPos |>.replaceEnd sorry
-      let nextIt := ⟨s, endPos, searcher⟩
-      pure ⟨.yield nextIt slice, sorry⟩
-    | none => pure ⟨.done, sorry⟩
+  step := fun ⟨iter⟩ =>
+    match iter with
+    | .operating s currPos searcher =>
+      match Internal.nextMatch searcher with
+      | some (searcher, startPos, endPos) =>
+        -- TODO: This is difficult, we want to put `startPos` here but our abstract notion of pattern
+        -- might return something that is in fact not `currPos ≤` and as such invalid to be used here.
+        -- we might require some lawfulness annotations on the pattern (or more precisely its searcher
+        -- iterator) to make this work out.
+        let slice := s.replaceStart currPos
+        let slice := { slice with endExclusive := ⟨startPos.up.offset, sorry⟩, startInclusive_le_endExclusive := sorry }
+        let nextIt := ⟨.operating s endPos searcher⟩
+        pure ⟨.yield nextIt slice, sorry⟩
+      | none =>
+        if currPos ≠ s.endPos then
+          let slice := s.replaceStart currPos
+          pure ⟨.yield ⟨.atEnd⟩ slice, sorry⟩
+        else
+          pure ⟨.done, sorry⟩
+    | .atEnd => pure ⟨.done, sorry⟩
 
 private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (SplitIterator ρ) m where
   rel := sorry
@@ -356,7 +390,7 @@ end SplitIterator
 
 @[specialize pat]
 def split (s : Slice) (pat : ρ) : Std.Iter (α := SplitIterator ρ) Slice :=
-  { internalState := { s, currPos := s.startPos, searcher := ToForwardSearcher.toSearcher s pat } }
+  { internalState := .operating s s.startPos (ToForwardSearcher.toSearcher s pat) }
 
 @[specialize pat]
 def trimStartMatches (s : Slice) (pat : ρ) : Slice :=
@@ -446,7 +480,7 @@ namespace BackwardCharSearcher
 
 @[inline]
 def iter (s : Slice) (c : Char) : Std.Iter (α := BackwardCharSearcher s) (SearchStep s) :=
-  { internalState := { currPos := s.startPos, needle := c }}
+  { internalState := { currPos := s.endPos, needle := c }}
 
 instance (s : Slice) : Std.Iterators.Iterator (BackwardCharSearcher s) Id (SearchStep s) where
   IsPlausibleStep it
@@ -504,7 +538,7 @@ namespace BackwardCharPredSearcher
 
 @[inline]
 def iter (s : Slice) (c : Char → Bool) : Std.Iter (α := BackwardCharPredSearcher s) (SearchStep s) :=
-  { internalState := { currPos := s.startPos, needle := c }}
+  { internalState := { currPos := s.endPos, needle := c }}
 
 instance (s : Slice) : Std.Iterators.Iterator (BackwardCharPredSearcher s) Id (SearchStep s) where
   IsPlausibleStep it
@@ -548,7 +582,7 @@ instance : Std.Iterators.IteratorLoop (BackwardCharPredSearcher s) Id Id :=
 instance : ToBackwardSearcher (Char → Bool) BackwardCharPredSearcher where
   toSearcher := iter
 
-instance : SuffixPattern Char := ToBackwardSearcher.defaultImplementation
+instance : SuffixPattern (Char → Bool) := ToBackwardSearcher.defaultImplementation
 
 end BackwardCharPredSearcher
 
