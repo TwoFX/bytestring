@@ -895,7 +895,7 @@ def ByteString.Slice.Pos.get! {s : ByteString.Slice} (pos : s.Pos) : Char :=
   if h : pos = s.endPos then panic! "Cannot retrieve character at end position" else pos.get h
 
 def ByteString.Slice.Pos.next {s : ByteString.Slice} (pos : s.Pos) (h : pos ≠ s.endPos) : s.Pos where
-  offset := pos.offset + (pos.byte h).utf8NumContinuationBytes sorry
+  offset := pos.offset + (pos.byte h).utf8NumContinuationBytes sorry + ⟨1⟩
   validOffset := sorry
 
 def ByteString.Slice.Pos.next? {s : ByteString.Slice} (pos : s.Pos) : Option s.Pos :=
