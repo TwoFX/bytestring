@@ -20,6 +20,23 @@ instance : DecidableLE ByteString.ByteOffset :=
 @[inline]
 def inc (offset : ByteOffset) : ByteOffset := ⟨offset.numBytes + 1⟩
 
+def findNextPos (offset : ByteOffset) (s : Slice) (h : offset < s.utf8Size) : s.Pos :=
+  if (s.utf8ByteAt offset h).isUtf8FirstByte then
+    go offset.inc
+  else
+    go offset
+where
+  go (offset : ByteOffset) : s.Pos :=
+    if h : offset < s.utf8Size then
+      if (s.utf8ByteAt offset h).isUtf8FirstByte then
+        s.pos! offset
+      else
+        go offset.inc
+    else
+      s.endPos
+  termination_by s.utf8Size - offset
+  decreasing_by sorry
+
 end ByteOffset
 
 deriving instance DecidableEq for ByteString.Pos

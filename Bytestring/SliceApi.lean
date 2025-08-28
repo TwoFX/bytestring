@@ -219,11 +219,11 @@ instance : ForwardPattern (Char → Bool) := .defaultImplementation
 
 end ForwardCharPredSearcher
 
-@[unbox]
 inductive ForwardSliceSearcher (s : Slice) where
-  | empty (pos : s.Pos) (finished : Bool)
+  | empty (pos : s.Pos)
   | proper (needle : Slice) (table : Array ByteOffset) (stackPos : ByteOffset) (needlePos : ByteOffset)
-  --deriving Inhabited
+  | atEnd
+  deriving Inhabited
 
 namespace ForwardSliceSearcher
 
@@ -233,12 +233,12 @@ def buildTable (pat : Slice) : Array ByteOffset :=
   else
     let arr := Array.emptyWithCapacity pat.utf8Size.numBytes
     let arr := arr.push 0
-    go (ByteOffset.inc 0) arr
+    go ⟨1⟩ arr
 where
   go (pos : ByteOffset) (table : Array ByteOffset) :=
     if h : pos < pat.utf8Size then
       let patByte := pat.utf8ByteAt pos h
-      let distance := computeDistance table[pos.numBytes - 1]! patByte table
+      let distance := computeDistance table[table.size - 1]! patByte table
       let distance := if patByte = pat.utf8ByteAt distance sorry then distance.inc else distance
       go pos.inc (table.push distance)
     else
@@ -247,7 +247,7 @@ where
   decreasing_by sorry
 
   computeDistance (distance : ByteOffset) (patByte : UInt8) (table : Array ByteOffset) : ByteOffset :=
-    if distance > 0 && patByte = pat.utf8ByteAt distance sorry then
+    if distance > 0 && patByte != pat.utf8ByteAt distance sorry then
       computeDistance table[distance.numBytes - 1]! patByte table
     else
       distance
@@ -257,7 +257,7 @@ where
 @[inline]
 def iter (s : Slice) (pat : Slice) : Std.Iter (α := ForwardSliceSearcher s) (SearchStep s) :=
   if pat.isEmpty then
-    { internalState := .empty s.startPos false }
+    { internalState := .empty s.startPos }
   else
     { internalState := .proper pat (buildTable pat) s.startPos.offset pat.startPos.offset }
 
@@ -265,16 +265,50 @@ instance (s : Slice) : Std.Iterators.Iterator (ForwardSliceSearcher s) Id (Searc
   IsPlausibleStep := sorry
   step := fun ⟨iter⟩ =>
     match iter with
-    | .empty pos finished =>
-      if finished then
-        pure ⟨.done, sorry⟩
+    | .empty pos =>
+      let res := .matched pos pos
+      if h : pos ≠ s.endPos then
+        pure ⟨.yield ⟨.empty (pos.next h)⟩ res, sorry⟩
       else
-        let res := .matched pos pos
-        if h : pos ≠ s.endPos then
-          pure ⟨.yield ⟨.empty (pos.next h) false⟩ res, sorry⟩
+        pure ⟨.yield ⟨.atEnd⟩ res, sorry⟩
+    | .proper needle table stackPos needlePos =>
+      let rec backtrackIfNecessary (pat : Slice) (table : Array ByteOffset) (stackByte : UInt8)
+          (needlePos : ByteOffset) : ByteOffset :=
+        if needlePos != 0 && stackByte != pat.utf8ByteAt needlePos sorry then
+          backtrackIfNecessary pat table stackByte table[needlePos.numBytes - 1]!
         else
-          pure ⟨.yield ⟨.empty pos true⟩ res, sorry⟩
-    | .proper pat table stackPos needlePos => sorry
+          needlePos
+      termination_by needlePos
+      decreasing_by sorry
+
+      let rec findNext (startPos : ByteOffset) (pat : Slice) (table : Array ByteOffset)
+          (stackPos : ByteOffset) (needlePos : ByteOffset) :=
+        if h1 : stackPos < s.utf8Size then
+          let stackByte := s.utf8ByteAt stackPos h1
+          let needlePos := backtrackIfNecessary pat table stackByte needlePos
+          let patByte := pat.utf8ByteAt needlePos sorry
+          if stackByte != patByte then
+            let nextStackPos := ByteOffset.findNextPos stackPos s sorry |>.offset
+            let res := .rejected (s.pos! startPos) (s.pos! nextStackPos)
+            ⟨.yield ⟨.proper pat table nextStackPos needlePos⟩ res, sorry⟩
+          else
+            let needlePos := needlePos.inc
+            if needlePos == pat.utf8Size then
+              let nextStackPos := stackPos.inc
+              let res := .matched (s.pos! startPos) (s.pos! nextStackPos)
+              ⟨.yield ⟨.proper pat table nextStackPos 0⟩ res, sorry⟩
+            else
+              findNext startPos pat table stackPos.inc needlePos
+        else
+          if startPos != s.utf8Size then
+            let res := .rejected (s.pos! startPos) (s.pos! stackPos)
+            ⟨.yield ⟨.atEnd⟩ res, sorry⟩
+          else
+            ⟨.done, sorry⟩
+        termination_by s.utf8Size - stackPos
+        decreasing_by sorry
+      findNext stackPos needle table stackPos needlePos
+    | .atEnd => pure ⟨.done, sorry⟩
 
 private def finitenessRelation : Std.Iterators.FinitenessRelation (ForwardSliceSearcher s) Id where
   rel := sorry
@@ -361,7 +395,7 @@ instance [Pure m] : Std.Iterators.Iterator (SplitIterator ρ) m Slice where
         let nextIt := ⟨.operating s endPos searcher⟩
         pure ⟨.yield nextIt slice, sorry⟩
       | none =>
-        if currPos ≠ s.endPos then
+        if currPos != s.endPos then
           let slice := s.replaceStart currPos
           pure ⟨.yield ⟨.atEnd⟩ slice, sorry⟩
         else
@@ -738,6 +772,7 @@ instance : DecidableEq Slice := sorry
 instance : Ord Slice := sorry
 instance : Hashable Slice := sorry
 
+
 structure CharIterator where
   s : Slice
   currPos : s.Pos
@@ -785,6 +820,50 @@ instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial CharIterator m 
 
 end CharIterator
 
+structure RevCharIterator where
+  s : Slice
+  currPos : s.Pos
+  --deriving Inhabited
+
+def revChars (s : Slice) : Std.Iter (α := RevCharIterator) Char :=
+  { internalState := { s, currPos := s.endPos }}
+
+namespace RevCharIterator
+
+instance [Pure m] : Std.Iterators.Iterator RevCharIterator m Char where
+  IsPlausibleStep it
+    | .yield it' out => sorry
+    | .skip _ => False
+    | .done => it.internalState.currPos = it.internalState.s.startPos
+  step := fun ⟨s, currPos⟩ =>
+    if h : currPos = s.startPos then
+      pure ⟨.done, by simp [h]⟩
+    else
+      let nextPos := currPos.prev h
+      pure ⟨.yield ⟨s, nextPos⟩ (nextPos.get (prev_ne_endPos h)), sorry⟩
+
+private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation RevCharIterator m where
+  rel := sorry
+  wf := sorry
+  subrelation := sorry
+
+instance [Pure m] : Std.Iterators.Finite RevCharIterator m :=
+  .of_finitenessRelation finitenessRelation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorCollect RevCharIterator m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorCollectPartial RevCharIterator m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorLoop RevCharIterator m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial RevCharIterator m n :=
+  .defaultImplementation
+
+end RevCharIterator
+
 structure PosIterator (s : Slice) where
   currPos : s.Pos
   deriving Inhabited
@@ -830,52 +909,23 @@ instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial (PosIterator s)
 
 end PosIterator
 
--- TODO: wait with this one until split is resolved, will run into the same issue
-structure LineIterator where
-  s : Slice
-  currPos : s.Pos
-  --deriving Inhabited
-
-namespace LineIterator
--- TODO: API to create iterator
-
-instance [Pure m] : Std.Iterators.Iterator LineIterator m Slice where
-  IsPlausibleStep it := sorry
-  step := sorry
-
-private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (LineIterator) m where
-  rel := sorry
-  wf := sorry
-  subrelation := sorry
-
-instance [Pure m] : Std.Iterators.Finite LineIterator m :=
-  .of_finitenessRelation finitenessRelation
-
-instance [Monad m] [Monad n] : Std.Iterators.IteratorCollect LineIterator m n :=
-  .defaultImplementation
-
-instance [Monad m] [Monad n] : Std.Iterators.IteratorCollectPartial LineIterator m n :=
-  .defaultImplementation
-
-instance [Monad m] [Monad n] : Std.Iterators.IteratorLoop LineIterator m n :=
-  .defaultImplementation
-
-instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial LineIterator m n :=
-  .defaultImplementation
-
-end LineIterator
-
 structure ByteIterator where
   s : Slice
   offset : ByteOffset
   --deriving Inhabited
 
+def bytes (s : Slice) : Std.Iter (α := ByteIterator) UInt8 :=
+  { internalState := { s, offset := s.startPos.offset }}
+
 namespace ByteIterator
--- TODO: API to create iterator
 
 instance [Pure m] : Std.Iterators.Iterator ByteIterator m UInt8 where
   IsPlausibleStep it := sorry
-  step := sorry
+  step := fun ⟨s, offset⟩ =>
+    if h : offset < s.utf8Size then
+      pure ⟨.yield ⟨s, offset.inc⟩ (s.utf8ByteAt offset h), sorry⟩
+    else
+      pure ⟨.done, sorry⟩
 
 private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (ByteIterator) m where
   rel := sorry
@@ -898,6 +948,8 @@ instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial ByteIterator m 
   .defaultImplementation
 
 end ByteIterator
+
+-- TODO: rev byte iterator after we have better ByteOffset reasoning support
 
 section Ranges
 
