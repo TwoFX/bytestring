@@ -11,18 +11,17 @@ variable {ρ : Type} {σ : Slice → Type}
 variable [∀ s, Std.Iterators.Iterator (σ s) Id (Slice.SearchStep s)]
 variable [∀ s, Std.Iterators.Finite (σ s) Id]
 variable [∀ s, Std.Iterators.IteratorLoop (σ s) Id Id]
-variable [Slice.ForwardPattern ρ σ]
 
 @[inline]
-def startsWith (s : ByteString) (pat : ρ) : Bool :=
+def startsWith [Slice.ForwardPattern ρ] (s : ByteString) (pat : ρ) : Bool :=
   s.toSlice.startsWith pat
 
 @[inline]
-def split (s : ByteString) (pat : ρ) : Std.Iter (α := Slice.SplitIterator ρ) Slice :=
+def split [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Std.Iter (α := Slice.SplitIterator ρ) Slice :=
   s.toSlice.split pat
 
 @[inline]
-def trimStartMatches (s : ByteString) (pat : ρ) : Slice :=
+def trimStartMatches [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Slice :=
   s.toSlice.trimStartMatches pat
 
 @[inline]
@@ -30,23 +29,23 @@ def trimAsciiStart (s : ByteString) : Slice :=
   s.toSlice.trimAsciiStart
 
 @[inline]
-def dropPrefix? (s : ByteString) (pat : ρ) : Option Slice :=
+def dropPrefix? [Slice.ForwardPattern ρ] (s : ByteString) (pat : ρ) : Option Slice :=
   s.toSlice.dropPrefix? pat
 
 @[inline]
-def trimPrefix (s : ByteString) (pat : ρ) : Slice :=
+def trimPrefix [Slice.ForwardPattern ρ] (s : ByteString) (pat : ρ) : Slice :=
   s.toSlice.trimPrefix pat
 
 @[inline]
-def find? (s : ByteString) (pat : ρ) : Option s.Pos :=
+def find? [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Option s.Pos :=
   s.toSlice.find? pat |>.map Slice.Pos.up
 
 @[inline]
-def contains (s : ByteString) (pat : ρ) : Bool :=
+def contains [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Bool :=
   s.toSlice.contains pat
 
 @[inline]
-def all (s : ByteString) (pat : ρ) : Bool :=
+def all [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Bool :=
   s.toSlice.all pat
 
 end ForwardPatternUsers

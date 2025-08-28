@@ -15,7 +15,7 @@ inductive SearchStep (s : Slice) where
 class ToForwardSearcher (ρ : Type) (σ : outParam (Slice → Type)) where
   toSearcher : (s : Slice) → ρ → Std.Iter (α := σ s) (SearchStep s)
 
-class ForwardPattern (ρ : Type) (σ : outParam (Slice → Type)) extends ToForwardSearcher ρ σ where
+class ForwardPattern (ρ : Type) where
   startsWith : Slice → ρ → Bool
   dropPrefix? : Slice → ρ → Option Slice
 
@@ -94,7 +94,7 @@ def defaultDropPrefix? (s : Slice) (pat : ρ) : Option Slice :=
   | _ => none
 
 @[always_inline, inline]
-def defaultImplementation : ForwardPattern ρ σ where
+def defaultImplementation : ForwardPattern ρ where
   startsWith := defaultStartsWith
   dropPrefix? := defaultDropPrefix?
 
@@ -156,7 +156,7 @@ instance : Std.Iterators.IteratorLoop (ForwardCharSearcher s) Id Id :=
 instance : ToForwardSearcher Char ForwardCharSearcher where
   toSearcher := iter
 
-instance : ForwardPattern Char ForwardCharSearcher := .defaultImplementation
+instance : ForwardPattern Char := .defaultImplementation
 
 end ForwardCharSearcher
 
@@ -215,7 +215,7 @@ instance : Std.Iterators.IteratorLoop (ForwardCharPredSearcher s) Id Id :=
 instance : ToForwardSearcher (Char → Bool) ForwardCharPredSearcher where
   toSearcher := iter
 
-instance : ForwardPattern (Char → Bool) ForwardCharPredSearcher := .defaultImplementation
+instance : ForwardPattern (Char → Bool) := .defaultImplementation
 
 end ForwardCharPredSearcher
 
@@ -310,14 +310,14 @@ def dropPrefix? (s : Slice) (pat : Slice) : Option Slice :=
   else
     none
 
-instance : ForwardPattern Slice ForwardSliceSearcher where
+instance : ForwardPattern Slice where
   startsWith := startsWith
   dropPrefix? := dropPrefix?
 
 instance : ToForwardSearcher ByteString ForwardSliceSearcher where
   toSearcher slice pat := iter slice pat.toSlice
 
-instance : ForwardPattern ByteString ForwardSliceSearcher where
+instance : ForwardPattern ByteString where
   startsWith s pat := startsWith s pat.toSlice
   dropPrefix? s pat := dropPrefix? s pat.toSlice
 
@@ -331,18 +331,19 @@ variable {ρ : Type} {σ : Slice → Type}
 variable [∀ s, Std.Iterators.Iterator (σ s) Id (SearchStep s)]
 variable [∀ s, Std.Iterators.Finite (σ s) Id]
 variable [∀ s, Std.Iterators.IteratorLoop (σ s) Id Id]
-variable [ForwardPattern ρ σ]
 
 @[inline]
-def startsWith (s : Slice) (pat : ρ) : Bool :=
+def startsWith [ForwardPattern ρ] (s : Slice) (pat : ρ) : Bool :=
   ForwardPattern.startsWith s pat
 
-inductive SplitIterator (ρ : Type) [ForwardPattern ρ σ] where
+inductive SplitIterator (ρ : Type) [ToForwardSearcher ρ σ] where
   | operating (s : Slice) (currPos : s.Pos) (searcher : Std.Iter (α := σ s) (SearchStep s))
   | atEnd
   deriving Inhabited
 
 namespace SplitIterator
+
+variable [ToForwardSearcher ρ σ]
 
 instance [Pure m] : Std.Iterators.Iterator (SplitIterator ρ) m Slice where
   IsPlausibleStep := sorry
@@ -390,11 +391,11 @@ instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial (SplitIterator 
 end SplitIterator
 
 @[specialize pat]
-def split (s : Slice) (pat : ρ) : Std.Iter (α := SplitIterator ρ) Slice :=
+def split [ToForwardSearcher ρ σ] (s : Slice) (pat : ρ) : Std.Iter (α := SplitIterator ρ) Slice :=
   { internalState := .operating s s.startPos (ToForwardSearcher.toSearcher s pat) }
 
 @[specialize pat]
-def trimStartMatches (s : Slice) (pat : ρ) : Slice :=
+def trimStartMatches [ToForwardSearcher ρ σ] (s : Slice) (pat : ρ) : Slice :=
   let searcher := ToForwardSearcher.toSearcher s pat
   match Internal.nextReject searcher with
   | some (_, startPos, _) => s.replaceStart startPos
@@ -406,27 +407,27 @@ def trimAsciiStart (s : Slice) : Slice :=
   trimStartMatches s Char.isWhitespace
 
 @[inline]
-def dropPrefix? (s : Slice) (pat : ρ) : Option Slice :=
+def dropPrefix? [ForwardPattern ρ] (s : Slice) (pat : ρ) : Option Slice :=
   ForwardPattern.dropPrefix? s pat
 
 @[specialize pat]
-def trimPrefix (s : Slice) (pat : ρ) : Slice :=
+def trimPrefix [ForwardPattern ρ] (s : Slice) (pat : ρ) : Slice :=
   dropPrefix? s pat |>.getD s
 
 @[specialize pat]
-def find? (s : Slice) (pat : ρ) : Option s.Pos :=
+def find? [ToForwardSearcher ρ σ] (s : Slice) (pat : ρ) : Option s.Pos :=
   let searcher := ToForwardSearcher.toSearcher s pat
   match Internal.nextMatch searcher with
   | some (_, startPos, _) => some startPos
   | none => none
 
 @[specialize pat]
-def contains (s : Slice) (pat : ρ) : Bool :=
+def contains [ToForwardSearcher ρ σ] (s : Slice) (pat : ρ) : Bool :=
   let searcher := ToForwardSearcher.toSearcher s pat
   Internal.nextMatch searcher |>.isSome
 
 @[specialize pat]
-def all (s : Slice) (pat : ρ) : Bool :=
+def all [ToForwardSearcher ρ σ] (s : Slice) (pat : ρ) : Bool :=
   let searcher := ToForwardSearcher.toSearcher s pat
   Internal.nextReject searcher |>.isNone
 
@@ -864,7 +865,6 @@ instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial LineIterator m 
 
 end LineIterator
 
--- TODO: wait with this one until markus has decided whether ByteOffset is a good idea
 structure ByteIterator where
   s : Slice
   offset : ByteOffset
