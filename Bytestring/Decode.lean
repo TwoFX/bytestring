@@ -1182,6 +1182,25 @@ theorem le_size_of_utf8DecodeChar?_eq_some {b : ByteArray} {i : Nat} {c : Char}
     omega
   omega
 
+theorem lt_size_of_isSome_utf8DecodeChar? {b : ByteArray} {i : Nat} (h : (utf8DecodeChar? b i).isSome) :
+    i < b.size := by
+  obtain ⟨c, hc⟩ := Option.isSome_iff_exists.1 h
+  have := le_size_of_utf8DecodeChar?_eq_some hc
+  have := c.utf8Size_pos
+  omega
+
+theorem utf8DecodeChar?_append_eq_some {b : ByteArray} {i : Nat} {c : Char} (h : utf8DecodeChar? b i = some c)
+    (b' : ByteArray) : utf8DecodeChar? (b ++ b') i = some c := by
+  have := le_size_of_utf8DecodeChar?_eq_some h
+  rw [utf8DecodeChar?_eq_utf8DecodeChar?_drop] at ⊢ h
+  rw [ByteArray.extract_eq_extract_append_extract b.size (by omega) (by simp), ByteArray.extract_append_size_left,
+    eq_of_utf8DecodeChar?_eq_some h, ByteArray.append_assoc, utf8DecodeChar?_utf8EncodeChar_append]
+
+theorem isSome_utf8DecodeChar?_append {b : ByteArray} {i : Nat} (h : (utf8DecodeChar? b i).isSome)
+    (b' : ByteArray) : (utf8DecodeChar? (b ++ b') i).isSome := by
+  obtain ⟨c, hc⟩ := Option.isSome_iff_exists.1 h
+  rw [utf8DecodeChar?_append_eq_some hc, Option.isSome_some]
+
 def utf8DecodeChar (bytes : ByteArray) (i : Nat) (h : (utf8DecodeChar? bytes i).isSome) : Char :=
   (utf8DecodeChar? bytes i).get h
 

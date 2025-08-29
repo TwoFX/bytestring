@@ -76,7 +76,7 @@ theorem ByteArray.getElem_append_right {i : Nat} {a b : ByteArray} {h : i < (a +
 
 @[simp]
 theorem List.getElem_toByteArray {l : List UInt8} {i : Nat} {h : i < l.toByteArray.size} :
-    l.toByteArray[i] = l[i]'(by simp_all) := by
+    l.toByteArray[i]'h = l[i]'(by simp_all) := by
   simp [ByteArray.getElem_eq_getElem_data]
 
 def ByteArray.drop (b : ByteArray) (i : Nat) : ByteArray :=
@@ -136,6 +136,26 @@ theorem ByteArray.extract_append_eq_left {a b : ByteArray} {i : Nat} (hi : i = a
   subst hi
   ext1
   simp
+
+theorem ByteArray.extract_append_size_left {a b : ByteArray} {i : Nat} :
+    (a ++ b).extract i a.size = a.extract i a.size := by
+  ext1
+  simp
+
+theorem ByteArray.extract_append_size_add {a b : ByteArray} {i j : Nat} :
+    (a ++ b).extract (a.size + i) (a.size + j) = b.extract i j := by
+  ext1
+  simp
+
+theorem ByteArray.extract_append  {as bs : ByteArray} {i j : Nat} :
+    (as ++ bs).extract i j = as.extract i j ++ bs.extract (i - as.size) (j - as.size) := by
+  ext1
+  simp
+
+theorem ByteArray.extract_append_size_add' {a b : ByteArray} {i j k : Nat} (h : k = a.size) :
+    (a ++ b).extract (k + i) (k + j) = b.extract i j := by
+  cases h
+  rw [extract_append_size_add]
 
 theorem ByteArray.extract_extract {a : ByteArray} {i j k l : Nat} :
     (a.extract i j).extract k l = a.extract (i + k) (min (i + l) j) := by
