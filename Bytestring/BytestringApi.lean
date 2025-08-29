@@ -103,6 +103,9 @@ instance : Hashable ByteString := sorry
 def chars (s : ByteString) : Std.Iter (α := Slice.CharIterator) Char :=
   s.toSlice.chars
 
+def revChars (s : ByteString) : Std.Iter (α := Slice.RevCharIterator) Char :=
+  s.toSlice.revChars
+
 structure PosIterator (s : ByteString) where
   currPos : s.Pos
   --deriving Inhabited
@@ -128,8 +131,9 @@ instance [Pure m] : Std.Iterators.Iterator (PosIterator s) m s.Pos where
       pure ⟨.yield ⟨⟨currPos.next h⟩⟩ currPos, by simp [h]⟩
 
 private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (PosIterator s) m where
-  rel := sorry
-  wf := sorry
+  rel := InvImage WellFoundedRelation.rel
+      (fun it => s.utf8Size.numBytes - it.internalState.currPos.offset.numBytes)
+  wf := InvImage.wf _ WellFoundedRelation.wf
   subrelation := sorry
 
 instance [Pure m] : Std.Iterators.Finite (PosIterator s) m :=
@@ -149,6 +153,52 @@ instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial (PosIterator s)
 
 end PosIterator
 
--- TODO: iterator API
+structure RevPosIterator (s : ByteString) where
+  currPos : s.Pos
+  --deriving Inhabited
+
+def revPositions (s : ByteString) : Std.Iter (α := RevPosIterator s) s.Pos :=
+  { internalState := { currPos := s.endPos }}
+
+namespace RevPosIterator
+
+instance [Pure m] : Std.Iterators.Iterator (RevPosIterator s) m s.Pos where
+  IsPlausibleStep it := sorry
+  step := fun ⟨⟨currPos⟩⟩ =>
+    if h : currPos = s.startPos then
+      pure ⟨.done, sorry⟩
+    else
+      let prevPos := currPos.prev h
+      pure ⟨.yield ⟨⟨prevPos⟩⟩ prevPos, sorry⟩
+
+private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (RevPosIterator s) m where
+  rel := InvImage WellFoundedRelation.rel
+      (fun it => it.internalState.currPos.offset.numBytes)
+  wf := InvImage.wf _ WellFoundedRelation.wf
+  subrelation := sorry
+
+instance [Pure m] : Std.Iterators.Finite (RevPosIterator s) m :=
+  .of_finitenessRelation finitenessRelation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorCollect (RevPosIterator s) m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorCollectPartial (RevPosIterator s) m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorLoop (RevPosIterator s) m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial (RevPosIterator s) m n :=
+  .defaultImplementation
+
+end RevPosIterator
+
+-- TODO: naming
+def bytes' (s : ByteString) : Std.Iter (α := Slice.ByteIterator) UInt8 :=
+  s.toSlice.bytes
+
+def revBytes (s : ByteString) : Std.Iter (α := Slice.RevByteIterator) UInt8 :=
+  s.toSlice.revBytes
 
 end ByteString

@@ -143,8 +143,9 @@ instance (s : Slice) : Std.Iterators.Iterator (ForwardCharSearcher s) Id (Search
         pure ⟨.yield nextIt (.rejected currPos nextPos), by simp [h1, h2, nextIt, nextPos]⟩
 
 private def finitenessRelation : Std.Iterators.FinitenessRelation (ForwardCharSearcher s) Id where
-  rel := sorry
-  wf := sorry
+  rel := InvImage WellFoundedRelation.rel
+      (fun it => s.utf8Size.numBytes - it.internalState.currPos.offset.numBytes)
+  wf := InvImage.wf _ WellFoundedRelation.wf
   subrelation := sorry
 
 instance : Std.Iterators.Finite (ForwardCharSearcher s) Id :=
@@ -202,8 +203,9 @@ instance (s : Slice) : Std.Iterators.Iterator (ForwardCharPredSearcher s) Id (Se
 
 
 private def finitenessRelation : Std.Iterators.FinitenessRelation (ForwardCharPredSearcher s) Id where
-  rel := sorry
-  wf := sorry
+  rel := InvImage WellFoundedRelation.rel
+      (fun it => s.utf8Size.numBytes - it.internalState.currPos.offset.numBytes)
+  wf := InvImage.wf _ WellFoundedRelation.wf
   subrelation := sorry
 
 instance : Std.Iterators.Finite (ForwardCharPredSearcher s) Id :=
@@ -288,7 +290,7 @@ instance (s : Slice) : Std.Iterators.Iterator (ForwardSliceSearcher s) Id (Searc
           let needlePos := backtrackIfNecessary pat table stackByte needlePos
           let patByte := pat.utf8ByteAt needlePos sorry
           if stackByte != patByte then
-            let nextStackPos := ByteOffset.findNextPos stackPos s sorry |>.offset
+            let nextStackPos := ByteOffset.findNextPos stackPos s h1 |>.offset
             let res := .rejected (s.pos! startPos) (s.pos! nextStackPos)
             ⟨.yield ⟨.proper pat table nextStackPos needlePos⟩ res, sorry⟩
           else
@@ -547,8 +549,9 @@ instance (s : Slice) : Std.Iterators.Iterator (BackwardCharSearcher s) Id (Searc
         pure ⟨.yield nextIt (.rejected nextPos currPos), by simp [h1, h2, nextIt, nextPos]⟩
 
 private def finitenessRelation : Std.Iterators.FinitenessRelation (BackwardCharSearcher s) Id where
-  rel := sorry
-  wf := sorry
+  rel := InvImage WellFoundedRelation.rel
+      (fun it => it.internalState.currPos.offset.numBytes)
+  wf := InvImage.wf _ WellFoundedRelation.wf
   subrelation := sorry
 
 instance : Std.Iterators.Finite (BackwardCharSearcher s) Id :=
@@ -605,8 +608,9 @@ instance (s : Slice) : Std.Iterators.Iterator (BackwardCharPredSearcher s) Id (S
         pure ⟨.yield nextIt (.rejected nextPos currPos), by simp [h1, h2, nextIt, nextPos]⟩
 
 private def finitenessRelation : Std.Iterators.FinitenessRelation (BackwardCharPredSearcher s) Id where
-  rel := sorry
-  wf := sorry
+  rel := InvImage WellFoundedRelation.rel
+      (fun it => it.internalState.currPos.offset.numBytes)
+  wf := InvImage.wf _ WellFoundedRelation.wf
   subrelation := sorry
 
 instance : Std.Iterators.Finite (BackwardCharPredSearcher s) Id :=
@@ -799,8 +803,9 @@ instance [Pure m] : Std.Iterators.Iterator CharIterator m Char where
       pure ⟨.yield ⟨s, currPos.next h⟩ (currPos.get h), by simp [h]⟩
 
 private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation CharIterator m where
-  rel := sorry
-  wf := sorry
+  rel := InvImage WellFoundedRelation.rel
+      (fun it => it.internalState.s.utf8Size.numBytes - it.internalState.currPos.offset.numBytes)
+  wf := InvImage.wf _ WellFoundedRelation.wf
   subrelation := sorry
 
 instance [Pure m] : Std.Iterators.Finite CharIterator m :=
@@ -832,7 +837,11 @@ namespace RevCharIterator
 
 instance [Pure m] : Std.Iterators.Iterator RevCharIterator m Char where
   IsPlausibleStep it
-    | .yield it' out => sorry
+    | .yield it' out =>
+      ∃ h1 : it.internalState.s = it'.internalState.s,
+      ∃ h2 : it.internalState.currPos ≠ it.internalState.s.startPos,
+        it'.internalState.currPos = h1 ▸ (it.internalState.currPos.prev h2) ∧
+        (it.internalState.currPos.prev h2).get (prev_ne_endPos h2) = out
     | .skip _ => False
     | .done => it.internalState.currPos = it.internalState.s.startPos
   step := fun ⟨s, currPos⟩ =>
@@ -840,11 +849,12 @@ instance [Pure m] : Std.Iterators.Iterator RevCharIterator m Char where
       pure ⟨.done, by simp [h]⟩
     else
       let nextPos := currPos.prev h
-      pure ⟨.yield ⟨s, nextPos⟩ (nextPos.get (prev_ne_endPos h)), sorry⟩
+      pure ⟨.yield ⟨s, nextPos⟩ (nextPos.get (prev_ne_endPos h)), by simp [h, nextPos]⟩
 
 private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation RevCharIterator m where
-  rel := sorry
-  wf := sorry
+  rel := InvImage WellFoundedRelation.rel
+      (fun it => it.internalState.currPos.offset.numBytes)
+  wf := InvImage.wf _ WellFoundedRelation.wf
   subrelation := sorry
 
 instance [Pure m] : Std.Iterators.Finite RevCharIterator m :=
@@ -888,8 +898,9 @@ instance [Pure m] : Std.Iterators.Iterator (PosIterator s) m s.Pos where
       pure ⟨.yield ⟨⟨currPos.next h⟩⟩ currPos, by simp [h]⟩
 
 private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (PosIterator s) m where
-  rel := sorry
-  wf := sorry
+  rel := InvImage WellFoundedRelation.rel
+      (fun it => s.utf8Size.numBytes - it.internalState.currPos.offset.numBytes)
+  wf := InvImage.wf _ WellFoundedRelation.wf
   subrelation := sorry
 
 instance [Pure m] : Std.Iterators.Finite (PosIterator s) m :=
@@ -908,6 +919,53 @@ instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial (PosIterator s)
   .defaultImplementation
 
 end PosIterator
+
+structure RevPosIterator (s : Slice) where
+  currPos : s.Pos
+  deriving Inhabited
+
+def revPositions (s : Slice) : Std.Iter (α := RevPosIterator s) s.Pos :=
+  { internalState := { currPos := s.endPos }}
+
+namespace RevPosIterator
+
+instance [Pure m] : Std.Iterators.Iterator (RevPosIterator s) m s.Pos where
+  IsPlausibleStep it
+    | .yield it' out =>
+      ∃ h : it.internalState.currPos ≠ s.startPos,
+        it'.internalState.currPos = it.internalState.currPos.prev h ∧
+        it.internalState.currPos.prev h = out
+    | .skip _ => False
+    | .done => it.internalState.currPos = s.startPos
+  step := fun ⟨⟨currPos⟩⟩ =>
+    if h : currPos = s.startPos then
+      pure ⟨.done, by simp [h]⟩
+    else
+      let prevPos := currPos.prev h
+      pure ⟨.yield ⟨⟨prevPos⟩⟩ prevPos, by simp [h, prevPos]⟩
+
+private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (RevPosIterator s) m where
+  rel := InvImage WellFoundedRelation.rel
+      (fun it => it.internalState.currPos.offset.numBytes)
+  wf := InvImage.wf _ WellFoundedRelation.wf
+  subrelation := sorry
+
+instance [Pure m] : Std.Iterators.Finite (RevPosIterator s) m :=
+  .of_finitenessRelation finitenessRelation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorCollect (RevPosIterator s) m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorCollectPartial (RevPosIterator s) m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorLoop (RevPosIterator s) m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial (RevPosIterator s) m n :=
+  .defaultImplementation
+
+end RevPosIterator
 
 structure ByteIterator where
   s : Slice
@@ -928,8 +986,9 @@ instance [Pure m] : Std.Iterators.Iterator ByteIterator m UInt8 where
       pure ⟨.done, sorry⟩
 
 private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (ByteIterator) m where
-  rel := sorry
-  wf := sorry
+  rel := InvImage WellFoundedRelation.rel
+      (fun it => it.internalState.s.utf8Size.numBytes - it.internalState.offset.numBytes)
+  wf := InvImage.wf _ WellFoundedRelation.wf
   subrelation := sorry
 
 instance [Pure m] : Std.Iterators.Finite ByteIterator m :=
@@ -949,7 +1008,47 @@ instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial ByteIterator m 
 
 end ByteIterator
 
--- TODO: rev byte iterator after we have better ByteOffset reasoning support
+structure RevByteIterator where
+  s : Slice
+  offset : ByteOffset
+  --deriving Inhabited
+
+def revBytes (s : Slice) : Std.Iter (α := RevByteIterator) UInt8 :=
+  { internalState := { s, offset := s.endPos.offset }}
+
+namespace RevByteIterator
+
+instance [Pure m] : Std.Iterators.Iterator RevByteIterator m UInt8 where
+  IsPlausibleStep it := sorry
+  step := fun ⟨s, offset⟩ =>
+    if offset != 0 then
+      let nextOffset := offset.dec
+      pure ⟨.yield ⟨s, nextOffset⟩ (s.utf8ByteAt nextOffset sorry), sorry⟩
+    else
+      pure ⟨.done, sorry⟩
+
+private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (RevByteIterator) m where
+  rel := InvImage WellFoundedRelation.rel
+      (fun it => it.internalState.offset.numBytes)
+  wf := InvImage.wf _ WellFoundedRelation.wf
+  subrelation := sorry
+
+instance [Pure m] : Std.Iterators.Finite RevByteIterator m :=
+  .of_finitenessRelation finitenessRelation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorCollect RevByteIterator m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorCollectPartial RevByteIterator m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorLoop RevByteIterator m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial RevByteIterator m n :=
+  .defaultImplementation
+
+end RevByteIterator
 
 section Ranges
 
