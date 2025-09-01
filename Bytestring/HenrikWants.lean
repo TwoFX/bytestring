@@ -50,5 +50,27 @@ namespace Slice
 
 theorem prev_ne_endPos {s : Slice} {p : s.Pos} (h : p ≠ s.startPos) : p.prev h ≠ s.endPos := sorry
 
+namespace Pos
+
+def nextn {s : Slice} (p : s.Pos) (n : Nat) : s.Pos :=
+  match n with
+  | 0 => p
+  | n + 1 =>
+    if h : p ≠ s.endPos then
+      nextn (p.next h) n
+    else
+      p
+
+def prevn {s : Slice} (p : s.Pos) (n : Nat) : s.Pos :=
+  match n with
+  | 0 => p
+  | n + 1 =>
+    if h : p ≠ s.startPos then
+      nextn (p.prev h) n
+    else
+      p
+
+end Pos
+
 end Slice
 end ByteString

@@ -482,8 +482,12 @@ end SplitInclusiveIterator
 def splitInclusive [ToForwardSearcher ρ σ] (s : Slice) (pat : ρ) : Std.Iter (α := SplitInclusiveIterator ρ) Slice :=
   { internalState := .operating s s.startPos (ToForwardSearcher.toSearcher s pat) }
 
+@[inline]
+def drop (s : Slice) (n : Nat) : Slice :=
+  s.replaceStart (s.startPos.nextn n)
+
 @[specialize pat]
-def trimStartMatches [ToForwardSearcher ρ σ] (s : Slice) (pat : ρ) : Slice :=
+def dropWhile [ToForwardSearcher ρ σ] (s : Slice) (pat : ρ) : Slice :=
   let searcher := ToForwardSearcher.toSearcher s pat
   match Internal.nextReject searcher with
   | some (_, startPos, _) => s.replaceStart startPos
@@ -492,7 +496,18 @@ def trimStartMatches [ToForwardSearcher ρ σ] (s : Slice) (pat : ρ) : Slice :=
 -- If we want to optimize this can be pushed further by specialising for ASCII
 @[inline]
 def trimAsciiStart (s : Slice) : Slice :=
-  trimStartMatches s Char.isWhitespace
+  dropWhile s Char.isWhitespace
+
+@[inline]
+def take (s : Slice) (n : Nat) : Slice :=
+  s.replaceEnd (s.startPos.nextn n)
+
+@[specialize pat]
+def takeWhile [ToForwardSearcher ρ σ] (s : Slice) (pat : ρ) : Slice :=
+  let searcher := ToForwardSearcher.toSearcher s pat
+  match Internal.nextReject searcher with
+  | some (_, startPos, _) => s.replaceEnd startPos
+  | none => s
 
 @[inline]
 def dropPrefix? [ForwardPattern ρ] (s : Slice) (pat : ρ) : Option Slice :=
@@ -778,8 +793,12 @@ def revSplit [ToBackwardSearcher ρ σ] (s : Slice) (pat : ρ) :
     Std.Iter (α := RevSplitIterator ρ) Slice :=
   { internalState := .operating s s.endPos (ToBackwardSearcher.toSearcher s pat) }
 
+@[inline]
+def dropEnd (s : Slice) (n : Nat) : Slice :=
+  s.replaceEnd (s.endPos.prevn n)
+
 @[specialize pat]
-def trimEndMatches [ToBackwardSearcher ρ σ] (s : Slice) (pat : ρ) : Slice :=
+def dropEndWhile [ToBackwardSearcher ρ σ] (s : Slice) (pat : ρ) : Slice :=
   let searcher := ToBackwardSearcher.toSearcher s pat
   match Internal.nextReject searcher with
   | some (_, _, endPos) => s.replaceEnd endPos
@@ -788,7 +807,18 @@ def trimEndMatches [ToBackwardSearcher ρ σ] (s : Slice) (pat : ρ) : Slice :=
 -- If we want to optimize this can be pushed further by specialising for ASCII
 @[inline]
 def trimAsciiEnd (s : Slice) : Slice :=
-  trimEndMatches s Char.isWhitespace
+  dropEndWhile s Char.isWhitespace
+
+@[inline]
+def takeEnd (s : Slice) (n : Nat) : Slice :=
+  s.replaceStart (s.startPos.prevn n)
+
+@[specialize pat]
+def takeEndWhile [ToBackwardSearcher ρ σ] (s : Slice) (pat : ρ) : Slice :=
+  let searcher := ToBackwardSearcher.toSearcher s pat
+  match Internal.nextReject searcher with
+  | some (_, _, endPos) => s.replaceStart endPos
+  | none => s
 
 @[inline]
 def dropSuffix? [SuffixPattern ρ] (s : Slice) (pat : ρ) : Option Slice :=

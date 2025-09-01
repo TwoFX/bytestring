@@ -25,12 +25,24 @@ def splitInclusive [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) :
   s.toSlice.splitInclusive pat
 
 @[inline]
-def trimStartMatches [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Slice :=
-  s.toSlice.trimStartMatches pat
+def drop (s : ByteString) (n : Nat) : Slice :=
+  s.toSlice.drop n
+
+@[inline]
+def dropWhile [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Slice :=
+  s.toSlice.dropWhile pat
 
 @[inline]
 def trimAsciiStart (s : ByteString) : Slice :=
   s.toSlice.trimAsciiStart
+
+@[inline]
+def take (s : ByteString) (n : Nat) : Slice :=
+  s.toSlice.take n
+
+@[inline]
+def takeWhile [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Slice :=
+  s.toSlice.takeWhile pat
 
 @[inline]
 def dropPrefix? [Slice.ForwardPattern ρ] (s : ByteString) (pat : ρ) : Option Slice :=
@@ -71,12 +83,24 @@ def revSplit [Slice.ToBackwardSearcher ρ σ] (s : ByteString) (pat : ρ) :
   s.toSlice.revSplit pat
 
 @[inline]
-def trimEndMatches [Slice.ToBackwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Slice :=
-  s.toSlice.trimEndMatches pat
+def dropEnd (s : ByteString) (n : Nat) : Slice :=
+  s.toSlice.dropEnd n
+
+@[inline]
+def dropEndWhile [Slice.ToBackwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Slice :=
+  s.toSlice.dropEndWhile pat
 
 @[inline]
 def trimAsciiEnd (s : ByteString) : Slice :=
   s.toSlice.trimAsciiEnd
+
+@[inline]
+def takeEnd (s : ByteString) (n : Nat) : Slice :=
+  s.toSlice.takeEnd n
+
+@[inline]
+def takeEndWhile [Slice.ToBackwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Slice :=
+  s.toSlice.takeEndWhile pat
 
 @[inline]
 def dropSuffix? [Slice.SuffixPattern ρ] (s : ByteString) (pat : ρ) : Option Slice :=
