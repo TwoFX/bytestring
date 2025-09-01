@@ -21,6 +21,10 @@ def split [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Std.Iter
   s.toSlice.split pat
 
 @[inline]
+def splitInclusive [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Std.Iter (α := Slice.SplitInclusiveIterator ρ) Slice :=
+  s.toSlice.splitInclusive pat
+
+@[inline]
 def trimStartMatches [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Slice :=
   s.toSlice.trimStartMatches pat
 
@@ -200,5 +204,8 @@ def bytes' (s : ByteString) : Std.Iter (α := Slice.ByteIterator) UInt8 :=
 
 def revBytes (s : ByteString) : Std.Iter (α := Slice.RevByteIterator) UInt8 :=
   s.toSlice.revBytes
+
+def lines (s : ByteString) :=
+  s.toSlice.lines
 
 end ByteString

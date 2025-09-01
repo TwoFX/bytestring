@@ -397,11 +397,8 @@ instance [Pure m] : Std.Iterators.Iterator (SplitIterator ρ) m Slice where
         let nextIt := ⟨.operating s endPos searcher⟩
         pure ⟨.yield nextIt slice, sorry⟩
       | none =>
-        if currPos != s.endPos then
-          let slice := s.replaceStart currPos
-          pure ⟨.yield ⟨.atEnd⟩ slice, sorry⟩
-        else
-          pure ⟨.done, sorry⟩
+        let slice := s.replaceStart currPos
+        pure ⟨.yield ⟨.atEnd⟩ slice, sorry⟩
     | .atEnd => pure ⟨.done, sorry⟩
 
 private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (SplitIterator ρ) m where
@@ -428,6 +425,61 @@ end SplitIterator
 
 @[specialize pat]
 def split [ToForwardSearcher ρ σ] (s : Slice) (pat : ρ) : Std.Iter (α := SplitIterator ρ) Slice :=
+  { internalState := .operating s s.startPos (ToForwardSearcher.toSearcher s pat) }
+
+inductive SplitInclusiveIterator (ρ : Type) [ToForwardSearcher ρ σ] where
+  | operating (s : Slice) (currPos : s.Pos) (searcher : Std.Iter (α := σ s) (SearchStep s))
+  | atEnd
+  deriving Inhabited
+
+namespace SplitInclusiveIterator
+
+variable [ToForwardSearcher ρ σ]
+
+instance [Pure m] : Std.Iterators.Iterator (SplitInclusiveIterator ρ) m Slice where
+  IsPlausibleStep := sorry
+  step := fun ⟨iter⟩ =>
+    match iter with
+    | .operating s currPos searcher =>
+      match Internal.nextMatch searcher with
+      | some (searcher, _, endPos) =>
+        -- TODO: difficult for the same reason as normal split
+        let slice := s.replaceStart currPos
+        let slice := { slice with endExclusive := ⟨endPos.up.offset, sorry⟩, startInclusive_le_endExclusive := sorry }
+        let nextIt := ⟨.operating s endPos searcher⟩
+        pure ⟨.yield nextIt slice, sorry⟩
+      | none =>
+        if currPos != s.endPos then
+          let slice := s.replaceStart currPos
+          pure ⟨.yield ⟨.atEnd⟩ slice, sorry⟩
+        else
+          pure ⟨.done, sorry⟩
+    | .atEnd => pure ⟨.done, sorry⟩
+
+private def finitenessRelation [Pure m] : Std.Iterators.FinitenessRelation (SplitInclusiveIterator ρ) m where
+  rel := sorry
+  wf := sorry
+  subrelation := sorry
+
+instance [Pure m] : Std.Iterators.Finite (SplitInclusiveIterator ρ) m :=
+  .of_finitenessRelation finitenessRelation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorCollect (SplitInclusiveIterator ρ) m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorCollectPartial (SplitInclusiveIterator ρ) m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorLoop (SplitInclusiveIterator ρ) m n :=
+  .defaultImplementation
+
+instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial (SplitInclusiveIterator ρ) m n :=
+  .defaultImplementation
+
+end SplitInclusiveIterator
+
+@[specialize pat]
+def splitInclusive [ToForwardSearcher ρ σ] (s : Slice) (pat : ρ) : Std.Iter (α := SplitInclusiveIterator ρ) Slice :=
   { internalState := .operating s s.startPos (ToForwardSearcher.toSearcher s pat) }
 
 @[specialize pat]
@@ -1049,6 +1101,18 @@ instance [Monad m] [Monad n] : Std.Iterators.IteratorLoopPartial RevByteIterator
   .defaultImplementation
 
 end RevByteIterator
+
+def lines.lineMap (s : Slice) : Slice :=
+  if let some s := s.dropSuffix? '\n' then
+    if let some s := s.dropSuffix? '\r' then
+      s
+    else
+      s
+  else
+    s
+
+def lines (s : Slice) :=
+  s.splitInclusive '\n' |>.map lines.lineMap
 
 section Ranges
 
