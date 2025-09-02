@@ -24,20 +24,28 @@ theorem String.utf8EncodeChar_ne_nil {c : Char} : String.utf8EncodeChar c ≠ []
 theorem List.utf8Encode_eq_empty {l : List Char} : l.utf8Encode = ByteArray.empty ↔ l = [] := by
   simp [utf8Encode, ← List.eq_nil_iff_forall_not_mem]
 
+@[simp]
 theorem utf8DecodeChar?_utf8Encode_singleton_append {b : ByteArray} {c : Char} :
     utf8DecodeChar? ([c].utf8Encode ++ b) 0 = some c := by
   rw [List.utf8Encode, List.flatMap_cons, List.toByteArray_append,
     List.flatMap_nil, List.toByteArray_nil, ByteArray.append_empty,
     utf8DecodeChar?_utf8EncodeChar_append]
 
+@[simp]
 theorem utf8DecodeChar?_utf8Encode_singleton {c : Char} :
     utf8DecodeChar? [c].utf8Encode 0 = some c := by
   simpa using utf8DecodeChar?_utf8Encode_singleton_append (b := ByteArray.empty)
 
+@[simp]
 theorem utf8DecodeChar?_utf8Encode_cons {l : List Char} {c : Char} :
     utf8DecodeChar? (c::l).utf8Encode 0 = some c := by
   rw [List.utf8Encode, List.flatMap_cons, List.toByteArray_append,
     utf8DecodeChar?_utf8EncodeChar_append]
+
+@[simp]
+theorem utf8DecodeChar_utf8Encode_cons {l : List Char} {c : Char} {h} :
+    utf8DecodeChar (c::l).utf8Encode 0 h = c := by
+  simp [utf8DecodeChar]
 
 theorem isValidUtf8_utf8Encode {l : List Char} : IsValidUtf8 l.utf8Encode where
   exists_model := ⟨l, rfl⟩
@@ -104,12 +112,12 @@ theorem ByteArray.isSome_utf8Decode?go_iff {b : ByteArray} {i : Nat} {hi : i ≤
       simp at hl
       omega
     rw [← l.head_cons_tail this] at hl
-    rw [utf8DecodeChar?_eq_utf8DecodeChar?_drop, hl, utf8DecodeChar?_utf8Encode_cons] at h₂
+    rw [utf8DecodeChar?_eq_utf8DecodeChar?_extract, hl, utf8DecodeChar?_utf8Encode_cons] at h₂
     simp at h₂
   | case3 i hi acc h₁ c h₂ ih =>
     rw [ih]
     have h₂' := h₂
-    rw [utf8DecodeChar?_eq_utf8DecodeChar?_drop] at h₂'
+    rw [utf8DecodeChar?_eq_utf8DecodeChar?_extract] at h₂'
     obtain ⟨l, hl⟩ := exists_of_utf8DecodeChar?_eq_some h₂'
     rw [ByteArray.extract_eq_extract_append_extract (i := i) (i + c.utf8Size) (by omega)
       (le_size_of_utf8DecodeChar?_eq_some h₂)] at hl ⊢
@@ -224,14 +232,14 @@ theorem ByteArray.utf8Decode?go_eq_utf8Decode?go_extract {b : ByteArray} {i : Na
     simp only [size_extract, Nat.le_refl, Nat.min_eq_left, Nat.zero_add, List.push_toArray,
       List.nil_append]
     rw [if_neg (by omega)]
-    rw [utf8DecodeChar?_eq_utf8DecodeChar?_drop] at h₂
+    rw [utf8DecodeChar?_eq_utf8DecodeChar?_extract] at h₂
     split <;> simp_all
   | case3 h₁ c h₂ =>
     conv => rhs; rw [utf8Decode?.go]
     simp only [size_extract, Nat.le_refl, Nat.min_eq_left, Nat.zero_add, List.push_toArray,
       List.nil_append]
     rw [if_neg (by omega)]
-    rw [utf8DecodeChar?_eq_utf8DecodeChar?_drop] at h₂
+    rw [utf8DecodeChar?_eq_utf8DecodeChar?_extract] at h₂
     split
     · simp_all
     · rename_i c' hc'
@@ -632,7 +640,7 @@ theorem isUtf8FirstByte_getElem_zero_utf8EncodeChar_append {c : Char} {b : ByteA
 
 theorem isUtf8FirstByte_of_isSome_utf8DecodeChar? {b : ByteArray} {i : Nat}
     (h : (utf8DecodeChar? b i).isSome) : (b[i]'(lt_size_of_isSome_utf8DecodeChar? h)).IsUtf8FirstByte := by
-  rw [utf8DecodeChar?_eq_utf8DecodeChar?_drop] at h
+  rw [utf8DecodeChar?_eq_utf8DecodeChar?_extract] at h
   suffices ((b.extract i b.size)[0]'(lt_size_of_isSome_utf8DecodeChar? h)).IsUtf8FirstByte by
     simpa [ByteArray.getElem_extract, Nat.add_zero] using this
   obtain ⟨c, hc⟩ := Option.isSome_iff_exists.1 h
@@ -771,8 +779,8 @@ theorem ByteString.validOffset_iff_isSome_utf8DecodeChar? {s : ByteString} {off 
       simp only [validOffset_push, utf8Size_push, bytes_push]
       refine ?_ ∘ Or.imp_left ih
       rintro ((rfl|h)|rfl)
-      · rw [utf8DecodeChar?_eq_utf8DecodeChar?_drop, ByteArray.extract_append_eq_right (by simp)]
-        simp [utf8DecodeChar?_utf8Encode_singleton]
+      · rw [utf8DecodeChar?_eq_utf8DecodeChar?_extract, ByteArray.extract_append_eq_right (by simp)]
+        simp
       · exact Or.inr (isSome_utf8DecodeChar?_append h _)
       · simp
   · refine (ByteString.validOffset_iff_isUtf8FirstByte _ _).2 (Or.inr ?_)
@@ -981,8 +989,8 @@ theorem ByteString.Slice.validOffset_iff_isSome_utf8DecodeChar? (s : ByteString.
     · refine Or.inr ⟨?_, ?_⟩
       · have := lt_size_of_isSome_utf8DecodeChar? h
         simpa [ByteOffset.lt_iff_numBytes_lt] using this
-      · rw [utf8DecodeChar?_eq_utf8DecodeChar?_drop] at h
-        rw [bytes_str_eq, ByteArray.append_assoc, utf8DecodeChar?_eq_utf8DecodeChar?_drop]
+      · rw [utf8DecodeChar?_eq_utf8DecodeChar?_extract] at h
+        rw [bytes_str_eq, ByteArray.append_assoc, utf8DecodeChar?_eq_utf8DecodeChar?_extract]
         simp only [ByteArray.size_append, ByteArray.size_extract, Nat.sub_zero, Nat.le_refl,
           Nat.min_eq_left]
         have h' : s.startInclusive.offset.numBytes ≤ s.str.bytes.size := by
@@ -1244,11 +1252,25 @@ theorem ByteString.data_eq_nil_iff {b : ByteString} : b.data = [] ↔ b = empty 
 theorem List.toByteString_eq_empty_iff {l : List Char} : l.toByteString = ByteString.empty ↔ l = [] := by
   rw [← ByteString.data_inj, data_toByteString, ByteString.data_empty]
 
-theorem ByteString.get_startPos {b : ByteString} (h) : b.startPos.get h = b.data.head (by rwa [ne_eq, data_eq_nil_iff, ← startPos_eq_endPos_iff]) := by
-  -- simp only [Pos.get, Slice.Pos.get, data, toCharArray, ByteArray.utf8Decode?]
-  -- conv => rhs; congr; congr; congr; rw [ByteArray.utf8Decode?.go]
-  -- simp
-  sorry
+@[simp]
+theorem List.length_toByteString {l : List Char} : l.toByteString.length = l.length := by
+  rw [← ByteString.length_data, data_toByteString]
+
+theorem ByteString.isSome_utf8DecodeChar?_zero {b : ByteString} (hb : b ≠ empty) : (utf8DecodeChar? b.bytes 0).isSome := by
+  refine (((validOffset_iff_isSome_utf8DecodeChar? (s := b)).1 validOffset_zero).elim ?_ id)
+  rw [eq_comm, utf8Size_eq_zero_iff]
+  exact fun h => (hb h).elim
+
+theorem ByteString.head_data {b : ByteString} {h} :
+    b.data.head h = utf8DecodeChar b.bytes 0 (isSome_utf8DecodeChar?_zero (by simpa using h)) := by
+  obtain ⟨l, rfl⟩ := b.exists_eq_toByteString
+  match l with
+  | [] => simp at h
+  | c::cs => simp
+
+theorem ByteString.get_startPos {b : ByteString} (h) :
+    b.startPos.get h = b.data.head (by rwa [ne_eq, data_eq_nil_iff, ← startPos_eq_endPos_iff]) :=
+  head_data.symm
 
 theorem ByteString.eq_singleton_append {s : ByteString} (h : s.startPos ≠ s.endPos) :
     ∃ t, s = singleton (s.startPos.get h) ++ t := by
@@ -1289,8 +1311,11 @@ theorem ByteString.Slice.Pos.ofCopy_toCopy {s : ByteString.Slice} {pos : s.Pos} 
   ByteString.Slice.Pos.ext (by simp)
 
 @[simp]
-theorem ByteString.Pos.ofCopy_toCopy {s : ByteString.Slice} {pos : s.copy.Pos} : pos.ofCopy.toCopy = pos :=
+theorem ByteString.Pos.toCopy_ofCopy {s : ByteString.Slice} {pos : s.copy.Pos} : pos.ofCopy.toCopy = pos :=
   ByteString.Pos.ext (by simp)
+
+theorem ByteString.Pos.ofCopy_inj {s : ByteString.Slice} {pos pos' : s.copy.Pos} : pos.ofCopy = pos'.ofCopy ↔ pos = pos' :=
+  ⟨fun h => by simpa using congrArg Slice.Pos.toCopy h, (· ▸ rfl)⟩
 
 @[simp]
 theorem ByteString.Slice.startPos_copy {s : ByteString.Slice} : s.copy.startPos = s.startPos.toCopy :=
@@ -1300,9 +1325,15 @@ theorem ByteString.Slice.startPos_copy {s : ByteString.Slice} : s.copy.startPos 
 theorem ByteString.Slice.endPos_copy {s : ByteString.Slice} : s.copy.endPos = s.endPos.toCopy :=
   ByteString.Pos.ext (by simp)
 
-theorem ByteString.Slice.Pos.get_toCopy {s : ByteString.Slice} {pos : s.Pos} (h) : pos.toCopy.get h = pos.get (by rintro rfl; simp at h) := by
-  rw [ByteString.Pos.get]
-  sorry
+theorem ByteString.Slice.Pos.get_toCopy {s : ByteString.Slice} {pos : s.Pos} (h) :
+    pos.toCopy.get h = pos.get (by rintro rfl; simp at h) := by
+  rw [ByteString.Pos.get, ByteString.Slice.Pos.get, ByteString.Slice.Pos.get]
+  simp only [str_toSlice, bytes_copy, startInclusive_toSlice, startPos_copy, offset_toCopy,
+    offset_startPos, ByteOffset.numBytes_zero, Pos.offset_toSlice, Nat.zero_add]
+  rw [utf8DecodeChar_eq_utf8DecodeChar_extract]
+  conv => lhs; congr; rw [ByteArray.extract_extract]
+  conv => rhs; rw [utf8DecodeChar_eq_utf8DecodeChar_extract]
+  exact utf8DecodeChar_extract_congr _ _ _
 
 def ByteString.Slice.Pos.ofReplaceStart {s : ByteString.Slice} {p₀ : s.Pos} (pos : (s.replaceStart p₀).Pos) : s.Pos where
   offset := p₀.offset + pos.offset
@@ -1329,14 +1360,25 @@ theorem ByteString.Slice.Pos.ofReplaceStart_startPos {s : ByteString.Slice} {pos
     ofReplaceStart (s.replaceStart pos).startPos = pos :=
   ByteString.Slice.Pos.ext (by simp)
 
-theorem ByteString.Slice.Pos.get_replaceStart {s : ByteString.Slice} {p₀ : s.Pos} {pos : (s.replaceStart p₀).Pos} {h} :
-    pos.get h = (ofReplaceStart pos).get sorry := sorry
+@[simp]
+theorem ByteString.Slice.Pos.ofReplaceStart_endPos {s : ByteString.Slice} {pos : s.Pos} :
+    ofReplaceStart (s.replaceStart pos).endPos = s.endPos := by
+  have := pos.validOffset.le_utf8Size
+  simp_all [Pos.ext_iff, ByteOffset.ext_iff, ByteOffset.le_iff_numBytes_le]
+
+theorem ByteString.Slice.Pos.ofReplaceStart_inj {s : ByteString.Slice} {p₀ : s.Pos} {pos pos' : (s.replaceStart p₀).Pos} :
+    ofReplaceStart pos = ofReplaceStart pos' ↔ pos = pos' := by
+  simp [Pos.ext_iff, ByteOffset.ext_iff]
+
+theorem ByteString.Slice.Pos.get_eq_get_ofReplaceStart {s : ByteString.Slice} {p₀ : s.Pos} {pos : (s.replaceStart p₀).Pos} {h} :
+    pos.get h = (ofReplaceStart pos).get (by rwa [← ofReplaceStart_endPos, ne_eq, ofReplaceStart_inj]) := by
+  simp [Slice.Pos.get, Nat.add_assoc]
 
 theorem ByteString.Slice.Pos.copy_eq_append_get {s : ByteString.Slice} {pos : s.Pos} (h : pos ≠ s.endPos) :
     ∃ t₁ t₂ : ByteString, s.copy = t₁ ++ ByteString.singleton (pos.get h) ++ t₂ ∧ t₁.utf8Size = pos.offset := by
-  obtain ⟨t₂, ht₂⟩ := (s.replaceStart pos).copy.eq_singleton_append sorry
+  obtain ⟨t₂, ht₂⟩ := (s.replaceStart pos).copy.eq_singleton_append (by simpa [← Pos.ofCopy_inj, ← ofReplaceStart_inj])
   refine ⟨(s.replaceEnd pos).copy, t₂, ?_, by simp⟩
-  rw [ByteString.Slice.startPos_copy, get_toCopy, get_replaceStart, ofReplaceStart_startPos] at ht₂
+  simp only [ByteString.Slice.startPos_copy, get_toCopy, get_eq_get_ofReplaceStart, ofReplaceStart_startPos] at ht₂
   rw [append_assoc, ← ht₂, ← copy_eq_copy_replaceEnd]
 
 theorem ByteString.Slice.Pos.utf8ByteSize_byte {s : ByteString.Slice} {pos : s.Pos} {h : pos ≠ s.endPos} :
@@ -1430,7 +1472,7 @@ def ByteString.Pos.cast {s t : ByteString} (pos : s.Pos) (h : s = t) : t.Pos whe
   validOffset := h ▸ pos.validOffset
 
 def ByteString.Pos.next {s : ByteString} (pos : s.Pos) (h : pos ≠ s.endPos) : s.Pos :=
-  (pos.toSlice.next sorry).ofSlice
+  (pos.toSlice.next (ne_of_apply_ne Slice.Pos.ofSlice (by simpa))).ofSlice
 
 @[simp]
 theorem ByteString.Pos.offset_cast {s t : ByteString} {pos : s.Pos} {h : s = t} :

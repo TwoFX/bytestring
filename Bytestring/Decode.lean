@@ -1136,7 +1136,7 @@ theorem exists_of_utf8DecodeChar?_eq_some {b : ByteArray} {c : Char} (h : utf8De
     ∃ l, b = (String.utf8EncodeChar c).toByteArray ++ l :=
   ⟨b.extract c.utf8Size b.size, eq_of_utf8DecodeChar?_eq_some h⟩
 
-theorem utf8DecodeChar?_eq_utf8DecodeChar?_drop {b : ByteArray} {i : Nat} :
+theorem utf8DecodeChar?_eq_utf8DecodeChar?_extract {b : ByteArray} {i : Nat} :
     utf8DecodeChar? b i = utf8DecodeChar? (b.extract i b.size) 0 := by
   simp [utf8DecodeChar?]
   have h₁ : i < b.size ↔ 0 < b.size - i := by omega
@@ -1172,7 +1172,7 @@ theorem utf8DecodeChar?_eq_utf8DecodeChar?_drop {b : ByteArray} {i : Nat} :
 
 theorem le_size_of_utf8DecodeChar?_eq_some {b : ByteArray} {i : Nat} {c : Char}
     (h : utf8DecodeChar? b i = some c) : i + c.utf8Size ≤ b.size := by
-  rw [utf8DecodeChar?_eq_utf8DecodeChar?_drop] at h
+  rw [utf8DecodeChar?_eq_utf8DecodeChar?_extract] at h
   obtain ⟨l, hl⟩ := exists_of_utf8DecodeChar?_eq_some h
   replace hl := congrArg ByteArray.size hl
   simp at hl
@@ -1192,7 +1192,7 @@ theorem lt_size_of_isSome_utf8DecodeChar? {b : ByteArray} {i : Nat} (h : (utf8De
 theorem utf8DecodeChar?_append_eq_some {b : ByteArray} {i : Nat} {c : Char} (h : utf8DecodeChar? b i = some c)
     (b' : ByteArray) : utf8DecodeChar? (b ++ b') i = some c := by
   have := le_size_of_utf8DecodeChar?_eq_some h
-  rw [utf8DecodeChar?_eq_utf8DecodeChar?_drop] at ⊢ h
+  rw [utf8DecodeChar?_eq_utf8DecodeChar?_extract] at ⊢ h
   rw [ByteArray.extract_eq_extract_append_extract b.size (by omega) (by simp), ByteArray.extract_append_size_left,
     eq_of_utf8DecodeChar?_eq_some h, ByteArray.append_assoc, utf8DecodeChar?_utf8EncodeChar_append]
 
@@ -1203,5 +1203,30 @@ theorem isSome_utf8DecodeChar?_append {b : ByteArray} {i : Nat} (h : (utf8Decode
 
 def utf8DecodeChar (bytes : ByteArray) (i : Nat) (h : (utf8DecodeChar? bytes i).isSome) : Char :=
   (utf8DecodeChar? bytes i).get h
+
+theorem utf8DecodeChar_eq_utf8DecodeChar_extract {b : ByteArray} {i : Nat} {h} :
+    utf8DecodeChar b i h =
+      utf8DecodeChar (b.extract i b.size) 0 (by rwa [utf8DecodeChar?_eq_utf8DecodeChar?_extract] at h) := by
+  simp [utf8DecodeChar, ← utf8DecodeChar?_eq_utf8DecodeChar?_extract]
+
+theorem utf8DecodeChar_extract_congr_of_le {bytes : ByteArray} (i j j' : Nat) {h h'} (hj : j ≤ j') :
+    utf8DecodeChar (bytes.extract i j) 0 h = utf8DecodeChar (bytes.extract i j') 0 h' := by
+  obtain ⟨c, hc⟩ := Option.isSome_iff_exists.1 h
+  obtain ⟨c', hc'⟩ := Option.isSome_iff_exists.1 h'
+  have hij : i ≤ j := by
+    have := lt_size_of_isSome_utf8DecodeChar? h
+    simp only [ByteArray.size_extract] at this
+    omega
+  have h₀ := eq_of_utf8DecodeChar?_eq_some hc'
+  simp only [utf8DecodeChar, hc, Option.get_some, hc', ← Option.some_inj (a := c)]
+  have := utf8DecodeChar?_append_eq_some hc (bytes.extract j j')
+  rw [← ByteArray.extract_eq_extract_append_extract j hij hj] at this
+  rw [← this, hc']
+
+theorem utf8DecodeChar_extract_congr {bytes : ByteArray} (i j j' : Nat) {h h'} :
+    utf8DecodeChar (bytes.extract i j) 0 h = utf8DecodeChar (bytes.extract i j') 0 h' := by
+  obtain (hj|hj) := Nat.le_or_le j j'
+  · exact utf8DecodeChar_extract_congr_of_le _ _ _ hj
+  · exact (utf8DecodeChar_extract_congr_of_le _ _ _ hj).symm
 
 end decode
