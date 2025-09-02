@@ -79,6 +79,10 @@ theorem List.getElem_toByteArray {l : List UInt8} {i : Nat} {h : i < l.toByteArr
     l.toByteArray[i]'h = l[i]'(by simp_all) := by
   simp [ByteArray.getElem_eq_getElem_data]
 
+theorem List.getElem_eq_getElem_toByteArray {l : List UInt8} {i : Nat} {h : i < l.length} :
+    l[i]'h = l.toByteArray[i]'(by simp_all) := by
+  simp
+
 def ByteArray.drop (b : ByteArray) (i : Nat) : ByteArray :=
   b.extract i b.size
 

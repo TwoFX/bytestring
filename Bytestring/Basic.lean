@@ -473,16 +473,6 @@ theorem UInt8.isUtf8FirstByte_eq_true {c : UInt8} :
     c.isUtf8FirstByte = true ↔ c.IsUtf8FirstByte := by
   grind [IsUtf8FirstByte, isUtf8FirstByte]
 
-def UInt8.utf8ByteSize (c : UInt8) (_h : c.IsUtf8FirstByte) : ByteString.ByteOffset :=
-  if c &&& 0x80 == 0 then
-    ⟨1⟩
-  else if c &&& 0xe0 == 0xc0 then
-    ⟨2⟩
-  else if c &&& 0xf0 == 0xe0 then
-    ⟨3⟩
-  else
-    ⟨4⟩
-
 def ByteString.push (b : ByteString) (c : Char) : ByteString where
   bytes := b.bytes ++ [c].utf8Encode
   isValidUtf8 := by
@@ -637,6 +627,10 @@ theorem isUtf8FirstByte_getElem_zero_utf8EncodeChar_append {c : Char} {b : ByteA
     (((String.utf8EncodeChar c).toByteArray ++ b)[0]'(by simp; have := c.utf8Size_pos; omega)).IsUtf8FirstByte := by
   rw [ByteArray.getElem_append_left (by simp [c.utf8Size_pos]),
     List.getElem_toByteArray, isUtf8FirstByte_getElem_utf8EncodeChar]
+
+theorem isUtf8FirstByte_getElem_zero_utf8EncodeChar {c : Char} :
+    ((String.utf8EncodeChar c)[0]'(by simp [c.utf8Size_pos])).IsUtf8FirstByte := by
+  simpa using isUtf8FirstByte_getElem_zero_utf8EncodeChar_append (b := .empty)
 
 theorem isUtf8FirstByte_of_isSome_utf8DecodeChar? {b : ByteArray} {i : Nat}
     (h : (utf8DecodeChar? b i).isSome) : (b[i]'(lt_size_of_isSome_utf8DecodeChar? h)).IsUtf8FirstByte := by
@@ -1233,6 +1227,9 @@ def ByteString.Pos.get? {s : ByteString} (pos : s.Pos) : Option Char :=
 def ByteString.Pos.get! {s : ByteString} (pos : s.Pos) : Char :=
   pos.toSlice.get!
 
+def ByteString.Pos.byte {s : ByteString} (pos : s.Pos) (h : pos ≠ s.endPos) : UInt8 :=
+  pos.toSlice.byte (ne_of_apply_ne Slice.Pos.ofSlice (by simp [h]))
+
 theorem ByteString.append_left_inj {s₁ s₂ : ByteString} (t : ByteString) :
     s₁ ++ t = s₂ ++ t ↔ s₁ = s₂ := by
   simp [← ByteString.data_inj]
@@ -1335,6 +1332,19 @@ theorem ByteString.Slice.Pos.get_toCopy {s : ByteString.Slice} {pos : s.Pos} (h)
   conv => rhs; rw [utf8DecodeChar_eq_utf8DecodeChar_extract]
   exact utf8DecodeChar_extract_congr _ _ _
 
+theorem ByteString.Slice.Pos.get_eq_get_toCopy {s : ByteString.Slice} {pos : s.Pos} {h} :
+    pos.get h = pos.toCopy.get (ne_of_apply_ne Pos.ofCopy (by simp [h])) :=
+  (get_toCopy _).symm
+
+theorem ByteString.Slice.Pos.byte_toCopy {s : ByteString.Slice} {pos : s.Pos} (h) :
+    pos.toCopy.byte h = pos.byte (by rintro rfl; simp at h) := by
+  rw [ByteString.Pos.byte, ByteString.Slice.Pos.byte, ByteString.Slice.Pos.byte]
+  simp [utf8ByteAt, ByteString.utf8ByteAt, bytes_copy, ByteArray.getElem_extract]
+
+theorem ByteString.Slice.Pos.byte_eq_byte_toCopy {s : ByteString.Slice} {pos : s.Pos} {h} :
+    pos.byte h = pos.toCopy.byte (ne_of_apply_ne Pos.ofCopy (by simp [h])) :=
+  (byte_toCopy _).symm
+
 def ByteString.Slice.Pos.ofReplaceStart {s : ByteString.Slice} {p₀ : s.Pos} (pos : (s.replaceStart p₀).Pos) : s.Pos where
   offset := p₀.offset + pos.offset
   validOffset := validOffset_replaceStart.1 pos.validOffset
@@ -1381,9 +1391,49 @@ theorem ByteString.Slice.Pos.copy_eq_append_get {s : ByteString.Slice} {pos : s.
   simp only [ByteString.Slice.startPos_copy, get_toCopy, get_eq_get_ofReplaceStart, ofReplaceStart_startPos] at ht₂
   rw [append_assoc, ← ht₂, ← copy_eq_copy_replaceEnd]
 
+def FirstByte.utf8ByteSize : FirstByte → ByteString.ByteOffset
+  | .invalid => ⟨0⟩
+  | .done => ⟨1⟩
+  | .oneMore => ⟨2⟩
+  | .twoMore => ⟨3⟩
+  | .threeMore => ⟨4⟩
+
+def UInt8.utf8ByteSize (c : UInt8) (_h : c.IsUtf8FirstByte) : ByteString.ByteOffset :=
+  if c &&& 0x80 == 0 then
+    ⟨1⟩
+  else if c &&& 0xe0 == 0xc0 then
+    ⟨2⟩
+  else if c &&& 0xf0 == 0xe0 then
+    ⟨3⟩
+  else
+    ⟨4⟩
+
+theorem UInt8.utf8ByteSize_eq_utf8ByteSize_parseFirstByte {c : UInt8} {h : c.IsUtf8FirstByte} :
+    c.utf8ByteSize h = (parseFirstByte c).utf8ByteSize := by
+  grind [utf8ByteSize, FirstByte.utf8ByteSize, parseFirstByte, IsUtf8FirstByte]
+
+theorem utf8ByteSize_getElem_utf8EncodeChar {c : Char} :
+    ((String.utf8EncodeChar c)[0]'(by simp [c.utf8Size_pos])).utf8ByteSize
+      isUtf8FirstByte_getElem_zero_utf8EncodeChar = c.utf8Size' := by
+  rw [UInt8.utf8ByteSize_eq_utf8ByteSize_parseFirstByte]
+  simp only [ByteString.ByteOffset.ext_iff, Char.numBytes_utf8Size']
+  obtain (hc|hc|hc|hc) := c.utf8Size_eq
+  · rw [parseFirstByte_utf8EncodeChar_eq_done hc, FirstByte.utf8ByteSize, hc]
+  · rw [parseFirstByte_utf8EncodeChar_eq_oneMore hc, FirstByte.utf8ByteSize, hc]
+  · rw [parseFirstByte_utf8EncodeChar_eq_twoMore hc, FirstByte.utf8ByteSize, hc]
+  · rw [parseFirstByte_utf8EncodeChar_eq_threeMore hc, FirstByte.utf8ByteSize, hc]
+
+theorem utf8Size'_utf8DecodeChar {b : ByteArray} {i} {h} :
+    (utf8DecodeChar b i h).utf8Size' =
+      (b[i]'(lt_size_of_isSome_utf8DecodeChar? h)).utf8ByteSize (isUtf8FirstByte_of_isSome_utf8DecodeChar? h) := by
+  rw [← utf8ByteSize_getElem_utf8EncodeChar]
+  simp only [List.getElem_eq_getElem_toByteArray, utf8EncodeChar_utf8DecodeChar]
+  simp [ByteArray.getElem_extract]
+
 theorem ByteString.Slice.Pos.utf8ByteSize_byte {s : ByteString.Slice} {pos : s.Pos} {h : pos ≠ s.endPos} :
     (pos.byte h).utf8ByteSize pos.isUtf8FirstByte_byte = (pos.get h).utf8Size' := by
-  sorry
+  simp only [Pos.get, utf8Size'_utf8DecodeChar, Pos.byte, Slice.utf8ByteAt, ByteString.utf8ByteAt,
+    ByteOffset.numBytes_add]
 
 def ByteString.Slice.Pos.next {s : ByteString.Slice} (pos : s.Pos) (h : pos ≠ s.endPos) : s.Pos where
   offset := pos.offset + (pos.byte h).utf8ByteSize pos.isUtf8FirstByte_byte

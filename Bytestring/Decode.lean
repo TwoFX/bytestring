@@ -1229,4 +1229,13 @@ theorem utf8DecodeChar_extract_congr {bytes : ByteArray} (i j j' : Nat) {h h'} :
   · exact utf8DecodeChar_extract_congr_of_le _ _ _ hj
   · exact (utf8DecodeChar_extract_congr_of_le _ _ _ hj).symm
 
+theorem utf8EncodeChar_utf8DecodeChar {b : ByteArray} {i : Nat} {h} :
+    (String.utf8EncodeChar (utf8DecodeChar b i h)).toByteArray = b.extract i (i + (utf8DecodeChar b i h).utf8Size) := by
+  rw [utf8DecodeChar?_eq_utf8DecodeChar?_extract] at h
+  obtain ⟨c, hc⟩ := Option.isSome_iff_exists.1 h
+  rw [utf8DecodeChar_eq_utf8DecodeChar_extract, utf8DecodeChar,
+    toByteArray_of_utf8DecodeChar?_eq_some (b := b.extract i b.size) (by simp),
+    ByteArray.extract_extract, Nat.add_zero, Nat.min_eq_left]
+  exact le_size_of_utf8DecodeChar?_eq_some (by simp [← utf8DecodeChar?_eq_utf8DecodeChar?_extract])
+
 end decode
