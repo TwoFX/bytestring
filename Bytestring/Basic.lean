@@ -1530,7 +1530,14 @@ theorem ByteString.Pos.offset_cast {s t : ByteString} {pos : s.Pos} {h : s = t} 
 
 def ByteString.appendSlice (s : ByteString) (t : ByteString.Slice) : ByteString where
   bytes := ByteArray.copySlice t.str.bytes t.startInclusive.offset.numBytes s.bytes s.bytes.size t.utf8Size.numBytes false
-  isValidUtf8 := sorry
+  isValidUtf8 := by
+    rw [ByteArray.copySlice_eq_append]
+    simp only [ByteArray.extract_zero_size, Slice.numBytes_utf8Size, ByteArray.size_data,
+      ByteArray.extract_add_left, ByteArray.append_empty]
+    refine s.isValidUtf8.append ?_
+    have := ByteOffset.le_iff_numBytes_le.1 t.startInclusive_le_endExclusive
+    simp only [this, Nat.add_sub_cancel']
+    simpa only [← t.bytes_copy] using t.copy.isValidUtf8
 
 instance : HAppend ByteString ByteString.Slice ByteString where
   hAppend s t := s.appendSlice t
