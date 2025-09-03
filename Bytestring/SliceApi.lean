@@ -1169,5 +1169,60 @@ We want this to work at least:
 
 end Ranges
 
+@[inline]
+def foldl {α : Type u} (f : α → Char → α) (init : α) (s : Slice) : α :=
+  go init f s s.startPos
+where
+  @[specialize]
+  go (acc : α) (f : α → Char → α) (s : Slice) (curr : s.Pos) : α :=
+    if h : curr = s.endPos then
+      acc
+    else
+      let c := curr.get h
+      go (f acc c) f s (curr.next h)
+  termination_by s.endPos.offset - curr.offset
+  decreasing_by sorry
+
+@[inline]
+def foldr {α : Type u} (f : α → Char → α) (init : α) (s : Slice) : α :=
+  go init f s s.endPos
+where
+  @[specialize]
+  go (acc : α) (f : α → Char → α) (s : Slice) (curr : s.Pos) : α :=
+    if h : curr = s.startPos then
+      acc
+    else
+      let nextPos := curr.prev h
+      let c := nextPos.get (prev_ne_endPos h)
+      go (f acc c) f s nextPos
+  termination_by s.endPos.offset - curr.offset
+  decreasing_by sorry
+
+@[inline]
+def isNat (s : Slice) : Bool :=
+  !s.isEmpty && s.all Char.isDigit
+
+def toNat? (s : Slice) : Option Nat :=
+  if s.isNat then
+    some <| s.foldl (fun n c => n * 10 + (c.toNat - '0'.toNat)) 0
+  else
+    none
+
+@[inline]
+def front? (s : Slice) : Option Char :=
+  s.startPos.get?
+
+@[inline]
+def front (s : Slice) : Char :=
+  s.front?.getD default
+
+@[inline]
+def back? (s : Slice) : Option Char :=
+  s.endPos.prev? |>.bind (·.get?)
+
+@[inline]
+def back (s : Slice) : Char :=
+  s.back?.getD default
+
 end Slice
 end ByteString

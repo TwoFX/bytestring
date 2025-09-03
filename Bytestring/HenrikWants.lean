@@ -46,6 +46,13 @@ deriving instance DecidableEq for ByteString.Pos
 
 def Pos.prev {s : ByteString} (pos : s.Pos) (h : pos ≠ s.startPos) : s.Pos := sorry
 
+@[inline]
+def Pos.prev? {s : ByteString} (p : s.Pos) : Option s.Pos :=
+  if h : p = s.startPos then
+    none
+  else
+    some (p.prev h)
+
 namespace Slice
 
 theorem prev_ne_endPos {s : Slice} {p : s.Pos} (h : p ≠ s.startPos) : p.prev h ≠ s.endPos := sorry
@@ -69,6 +76,13 @@ def prevn {s : Slice} (p : s.Pos) (n : Nat) : s.Pos :=
       nextn (p.prev h) n
     else
       p
+
+@[inline]
+def prev? {s : Slice} (p : s.Pos) : Option s.Pos :=
+  if h : p = s.startPos then
+    none
+  else
+    some (p.prev h)
 
 end Pos
 

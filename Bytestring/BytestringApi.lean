@@ -232,4 +232,67 @@ def revBytes (s : ByteString) : Std.Iter (α := Slice.RevByteIterator) UInt8 :=
 def lines (s : ByteString) :=
   s.toSlice.lines
 
+@[inline]
+def foldl {α : Type u} (f : α → Char → α) (init : α) (s : ByteString) : α :=
+  s.toSlice.foldl f init
+
+@[inline]
+def foldr {α : Type u} (f : α → Char → α) (init : α) (s : ByteString) : α :=
+  s.toSlice.foldr f init
+
+@[inline]
+def isNat (s : ByteString) : Bool :=
+  s.toSlice.isNat
+
+@[inline]
+def toNat? (s : ByteString) : Option Nat :=
+  s.toSlice.toNat?
+
+@[inline]
+def front? (s : ByteString) : Option Char :=
+  s.startPos.get?
+
+@[inline]
+def front (s : ByteString) : Char :=
+  s.front?.getD default
+
+@[inline]
+def back? (s : ByteString) : Option Char :=
+  s.endPos.prev? |>.bind (·.get?)
+
+@[inline]
+def back (s : ByteString) : Char :=
+  s.back?.getD default
+
+@[inline] def pushn (s : ByteString) (c : Char) (n : Nat) : ByteString :=
+  n.repeat (fun s => s.push c) s
+
+@[inline] def join (l : List ByteString) : ByteString :=
+  l.foldl (fun r s => r ++ s) ByteString.empty
+
+def intercalate (s : ByteString) : List ByteString → ByteString
+  | []      => ByteString.empty
+  | a :: as => go a s as
+where
+  go (acc : ByteString) (s : ByteString) : List ByteString → ByteString
+  | a :: as => go (acc ++ s ++ a) s as
+  | []      => acc
+
+
+/-
+#check String.toUpper
+#check String.toLower
+#check String.replace
+
+#check String.firstDiffPos
+#check String.map
+#check String.capitalize
+#check String.decapitalize
+
+#check String.set
+#check String.modify
+-/
+
+
+
 end ByteString
