@@ -514,7 +514,7 @@ def dropPrefix? [ForwardPattern ρ] (s : Slice) (pat : ρ) : Option Slice :=
   ForwardPattern.dropPrefix? s pat
 
 @[specialize pat]
-def trimPrefix [ForwardPattern ρ] (s : Slice) (pat : ρ) : Slice :=
+def dropPrefix [ForwardPattern ρ] (s : Slice) (pat : ρ) : Slice :=
   dropPrefix? s pat |>.getD s
 
 @[specialize pat]
@@ -825,7 +825,7 @@ def dropSuffix? [SuffixPattern ρ] (s : Slice) (pat : ρ) : Option Slice :=
   SuffixPattern.dropSuffix? s pat
 
 @[specialize pat]
-def trimSuffix [SuffixPattern ρ] (s : Slice) (pat : ρ) : Slice :=
+def dropSuffix [SuffixPattern ρ] (s : Slice) (pat : ρ) : Slice :=
   dropSuffix? s pat |>.getD s
 
 @[specialize pat]

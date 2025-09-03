@@ -49,8 +49,8 @@ def dropPrefix? [Slice.ForwardPattern ρ] (s : ByteString) (pat : ρ) : Option S
   s.toSlice.dropPrefix? pat
 
 @[inline]
-def trimPrefix [Slice.ForwardPattern ρ] (s : ByteString) (pat : ρ) : Slice :=
-  s.toSlice.trimPrefix pat
+def dropPrefix [Slice.ForwardPattern ρ] (s : ByteString) (pat : ρ) : Slice :=
+  s.toSlice.dropPrefix pat
 
 @[inline]
 def find? [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Option s.Pos :=
@@ -107,8 +107,8 @@ def dropSuffix? [Slice.SuffixPattern ρ] (s : ByteString) (pat : ρ) : Option Sl
   s.toSlice.dropSuffix? pat
 
 @[inline]
-def trimSuffix [Slice.SuffixPattern ρ] (s : ByteString) (pat : ρ) : Slice :=
-  s.toSlice.trimSuffix pat
+def dropSuffix [Slice.SuffixPattern ρ] (s : ByteString) (pat : ρ) : Slice :=
+  s.toSlice.dropSuffix pat
 
 @[inline]
 def revFind? [Slice.ToBackwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Option s.Pos :=
