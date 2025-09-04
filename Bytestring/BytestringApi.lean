@@ -362,6 +362,19 @@ def asciiDecapitalize (s : ByteString) : ByteString :=
   else
     s
 
+def firstDiffOffset (l r : ByteString) : ByteOffset :=
+  go l.startPos r.startPos
+where
+  go (lp : l.Pos) (rp : r.Pos) : ByteOffset :=
+    if h : lp ≠ l.endPos ∧ rp ≠ r.endPos then
+      if lp.get h.left != rp.get h.right then
+        lp.offset
+      else
+        go (lp.next h.left) (rp.next h.right)
+    else
+      lp.offset
+  termination_by l.endPos.offset - lp.offset
+  decreasing_by sorry
 
 /-
 #check String.firstDiffPos
