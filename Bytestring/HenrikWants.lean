@@ -53,6 +53,11 @@ def Pos.prev? {s : ByteString} (p : s.Pos) : Option s.Pos :=
   else
     some (p.prev h)
 
+opaque _root_.Char.isAscii : Char → Bool
+
+def setAscii (s : ByteString) (p : s.Pos) {h1 : p ≠ s.endPos} (h2 : (p.get h1).isAscii)
+    (c : Char) (h3 : c.isAscii) : ByteString := sorry
+
 namespace Slice
 
 theorem prev_ne_endPos {s : Slice} {p : s.Pos} (h : p ≠ s.startPos) : p.prev h ≠ s.endPos := sorry

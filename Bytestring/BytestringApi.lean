@@ -64,6 +64,35 @@ def contains [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Bool 
 def all [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) : Bool :=
   s.toSlice.all pat
 
+@[specialize pat]
+def replace' [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) (r : ByteString.Slice) :
+    ByteString :=
+  let slice := s.toSlice
+  let searcher := Slice.ToForwardSearcher.toSearcher slice pat
+  go slice searcher ByteString.empty r
+where
+  go [∀ s, Std.Iterators.Iterator (σ s) Id (Slice.SearchStep s)] [∀ s, Std.Iterators.Finite (σ s) Id]
+      (s : ByteString.Slice) (searcher : Std.Iter (α := σ s) (Slice.SearchStep s))
+      (acc : ByteString) (r : ByteString.Slice) : ByteString :=
+    match searcher.step with
+    | .yield it (.matched startPos endPos) _ =>
+      let acc := acc.appendSlice r
+      go s it acc r
+    | .yield it (.rejected startPos endPos) _ =>
+      -- TODO: same issue as with split
+      let part := s.replaceStart startPos
+      let part := { part with endExclusive := ⟨endPos.up.offset, sorry⟩, startInclusive_le_endExclusive := sorry }
+      let acc := acc.appendSlice part
+      go s it acc r
+    | .skip it .. => go s it acc r
+    | .done .. => acc
+  termination_by Std.Iterators.Iter.finitelyManySteps searcher
+
+@[inline]
+def replace [Slice.ToForwardSearcher ρ σ] (s : ByteString) (pat : ρ) (r : ByteString) :
+    ByteString :=
+  replace' s pat r.toSlice
+
 end ForwardPatternUsers
 
 section SuffixPatternUsers
@@ -278,21 +307,64 @@ where
   | a :: as => go (acc ++ s ++ a) s as
   | []      => acc
 
+def toAsciiUpper (s : ByteString) : ByteString :=
+  go s s.startPos
+where
+  go (s : ByteString) (pos : s.Pos) : ByteString :=
+    if h1 : pos = s.endPos then
+      s
+    else
+      let c := pos.get h1
+      if h2 : c.isAscii then
+        let s := s.setAscii pos h2 c.toUpper sorry
+        go s (s.pos! (pos.next h1).offset)
+      else
+        go s (pos.next h1)
+  termination_by s.endPos.offset - pos.offset
+  decreasing_by all_goals sorry
+
+def toAsciiLower (s : ByteString) : ByteString :=
+  go s s.startPos
+where
+  -- TODO: can use byte level stuff if needed for perf
+  go (s : ByteString) (pos : s.Pos) : ByteString :=
+    if h1 : pos = s.endPos then
+      s
+    else
+      let c := pos.get h1
+      if h2 : c.isAscii then
+        let s := s.setAscii pos h2 c.toLower sorry
+        go s (s.pos! (pos.next h1).offset)
+      else
+        go s (pos.next h1)
+  termination_by s.endPos.offset - pos.offset
+  decreasing_by all_goals sorry
+
+def asciiCapitalize (s : ByteString) : ByteString :=
+  let pos := s.startPos
+  if h1 : pos ≠ s.endPos then
+    let c := pos.get h1
+    if h2 : c.isAscii then
+      s.setAscii pos h2 c.toUpper sorry
+    else
+      s
+  else
+    s
+
+def asciiDecapitalize (s : ByteString) : ByteString :=
+  let pos := s.startPos
+  if h1 : pos ≠ s.endPos then
+    let c := pos.get h1
+    if h2 : c.isAscii then
+      s.setAscii pos h2 c.toLower sorry
+    else
+      s
+  else
+    s
+
 
 /-
-#check String.toUpper
-#check String.toLower
-#check String.replace
-
 #check String.firstDiffPos
-#check String.map
-#check String.capitalize
-#check String.decapitalize
-
-#check String.set
-#check String.modify
 -/
-
-
 
 end ByteString
